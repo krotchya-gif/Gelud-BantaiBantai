@@ -76,3 +76,18 @@ body.deathmatch #feed{top:218px}
 @media(max-width:700px){#pause-copy{font-size:15px}}
 #fps-counter{position:absolute;top:calc(10px + var(--sa-t));left:calc(10px + var(--sa-l));z-index:3;padding:3px 6px;border:1px solid var(--ink);border-radius:6px;background:#16102ccc;color:#b9b0e0;font:600 10px/1 ui-monospace,Consolas,monospace;letter-spacing:.04em;pointer-events:none}
 #feed{top:calc(48px + var(--sa-t))}
+
+@media (pointer:coarse){
+  #dm-leaderboard{left:calc(4px + var(--sa-l));width:min(136px,40vw);padding:5px 6px;background:#16102cbc}
+  #dm-leaderboard h2{font-size:11px}
+  #dm-leaderboard ol{gap:1px}
+  #dm-leaderboard li{font-size:9.5px}
+  #dm-leaderboard li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #dm-leaderboard li b{flex:0 0 auto;font-size:11px}
+}
+
+#arena-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch;justify-content:stretch;max-height:min(28vh,220px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:2px}
+#arena-cards .choice-card{max-width:none;min-width:0;min-height:48px}
+#arena-cards .choice-card strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:700px){#arena-cards{grid-template-columns:repeat(3,minmax(0,1fr));max-height:25vh}#arena-cards .choice-card{min-height:42px}#arena-cards .choice-card small{display:none}}
+@media(max-height:520px){#arena-cards{grid-template-columns:repeat(6,minmax(0,1fr));max-height:23vh}#arena-cards .choice-card{min-height:34px}}

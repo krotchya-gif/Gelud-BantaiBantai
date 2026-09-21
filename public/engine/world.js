@@ -17,7 +17,9 @@ var ARENA_VARIANTS = {
     description: `Layered cover creates tighter lanes.`,
     icon: `🧱`,
   },
+  ...(window.GBH_MAP_PACK?.arenaVariants || {}),
 };
+var BIOME_SURFACE = Object.freeze({ NONE: 0, WATER: 1, LAVA: 2, TOXIC: 3, ICE: 4, MUD: 5, LOW_GRAVITY: 6, BRIDGE: 7 });
 var $c = (e, t, n) => Math.max(t, Math.min(n, e)),
   el = (e, t, n) => e + (t - e) * n,
   tl = (e, t, n) => {
@@ -174,6 +176,10 @@ var ol = (e, t, n, r) => (e - n) * (e - n) + (t - r) * (t - r),
         (this.time = 15.4),
         (this.night = 0),
         (this.ambientLevel = 1),
+        (this.biomeSky = null),
+        (this.biomeFog = null),
+        (this.biomeSkyColor = new J()),
+        (this.biomeGroundColor = new J()),
         (this.state = {
           sun: new J(),
           sky: new J(),
@@ -361,6 +367,9 @@ var ol = (e, t, n, r) => (e - n) * (e - n) + (t - r) * (t - r),
     setTime(e) {
       ((this.time = ((e % 24) + 24) % 24), this.applyTime());
     }
+    setBiomePalette(e) {
+      ((this.biomeSky = e?.sky ? new J(e.sky) : null), (this.biomeFog = e?.fog ? new J(e.fog) : null), this.applyTime());
+    }
     sample(e) {
       let t = 0;
       for (; t < ul.length - 2 && e >= ul[t + 1].h;) t++;
@@ -381,7 +390,9 @@ var ol = (e, t, n, r) => (e - n) * (e - n) + (t - r) * (t - r),
         n = ((e - 6) / 13) * Math.PI,
         r = Math.sin(n),
         i = e > 6 && e < 19 ? tl(0, 0.2, r) : 0,
-        a = Math.max(tl(19.15, 20.2, e), 1 - tl(4.7, 5.7, e));
+        a = Math.max(tl(19.15, 20.2, e), 1 - tl(4.7, 5.7, e)),
+        sky = this.biomeSky ? this.biomeSkyColor.copy(t.sky).lerp(this.biomeSky, 0.28) : t.sky,
+        ground = this.biomeFog ? this.biomeGroundColor.copy(t.ground).lerp(this.biomeFog, 0.2) : t.ground;
       if (i > 5e-4)
         (this.keyDir.set(Math.cos(n), Math.max(r * 0.85, 0.17), -(0.22 + 0.3 * r)).normalize(),
           this.key.color.copy(t.sun),
@@ -390,13 +401,13 @@ var ol = (e, t, n, r) => (e - n) * (e - n) + (t - r) * (t - r),
         let t = (e > 12 ? e - 20 : e + 4) * 0.06;
         (this.keyDir.set(0.55 - t, 0.78, -0.5).normalize(), this.key.color.copy(dl), (this.key.intensity = fl * a));
       }
-      (this.hemi.color.copy(t.sky),
-        this.hemi.groundColor.copy(t.ground),
+      (this.hemi.color.copy(sky),
+        this.hemi.groundColor.copy(ground),
         (this.hemi.intensity = t.hemiI),
         this.fill.color.copy(t.fill),
         (this.fill.intensity = t.fillI),
         (this.scene.environmentIntensity = t.envI),
-        this.scene.background.copy(t.sky).multiplyScalar(0.18),
+        this.scene.background.copy(sky).multiplyScalar(0.18),
         (this.pipeline.renderer.toneMappingExposure = t.exp),
         (this.night = Math.max(tl(18.5, 19.55, e), 1 - tl(5.4, 6.3, e))),
         (this.ambientLevel = el(1, 0.36, this.night)));
@@ -884,6 +895,9 @@ var Zl = class {
         (this.tiles = new Uint8Array(1936)),
         (this.styles = new Uint8Array(1936)),
         (this.blockers = new Uint8Array(1936)),
+        (this.surfaceTypes = new Uint8Array(1936)),
+        (this.hazardTiles = []),
+        (this.hazardMeshes = []),
         (this.instanceOf = new Int32Array(1936).fill(-1)),
         (this.bushRange = new Int32Array(3872).fill(-1)),
         (this.spawns = []),
@@ -909,6 +923,7 @@ var Zl = class {
         this.buildWalls(),
         this.buildBushes(),
         this.buildWater(),
+        this.buildBiomeSurfaces(),
         this.buildLamps(),
         this.buildOutskirts());
     }
@@ -925,6 +940,19 @@ var Zl = class {
     }
     isBushAt(e, t) {
       return this.tileAt(e, t) === Z.BUSH;
+    }
+    surfaceAt(e, t) {
+      let n = this.toTile(e),
+        r = this.toTile(t);
+      return Il(n, r) ? this.surfaceTypes[Fl(n, r)] : BIOME_SURFACE.NONE;
+    }
+    hazardDamageAt(e, t) {
+      let n = this.surfaceAt(e, t),
+        r = this.biomeGameplay;
+      return n === BIOME_SURFACE.LAVA ? r?.hazardDamagePerSecond || 0 : n === BIOME_SURFACE.TOXIC ? r?.toxicDamagePerSecond || 0 : 0;
+    }
+    gravityAt(e, t) {
+      return this.surfaceAt(e, t) === BIOME_SURFACE.LOW_GRAVITY ? this.biomeGameplay?.lowGravityMultiplier || 1 : 1;
     }
     isSolidTile(e, t) {
       if (!Il(e, t)) return !0;
@@ -949,6 +977,48 @@ var Zl = class {
       );
     }
     generate(e) {
+      let mapPack = window.GBH_MAP_PACK;
+      if (mapPack?.MAPS[this.arenaName]) {
+        let blueprint = mapPack.generate(this.arenaName, e);
+        mapPack.applyLegacyWorld(this, blueprint, Z, Fc);
+        this.seed = e;
+        this.surfaceTypes.fill(BIOME_SURFACE.NONE);
+        this.hazardTiles = [];
+        this.biomeName = blueprint.biome;
+        this.biomePalette = blueprint.palette;
+        this.biomeGameplay = blueprint.gameplay;
+        this.mapLandmarks = blueprint.landmarks;
+        for (let i = 0; i < blueprint.cells.length; i++) {
+          let cell = blueprint.cells[i],
+            surface = BIOME_SURFACE.NONE;
+          if (cell.kind === mapPack.CELL.WATER) surface = BIOME_SURFACE.WATER;
+          else if (cell.kind === mapPack.CELL.HAZARD) {
+            surface = cell.meta?.hazardType === `toxic` ? BIOME_SURFACE.TOXIC : cell.meta?.hazardType === `low-gravity` ? BIOME_SURFACE.LOW_GRAVITY : BIOME_SURFACE.LAVA;
+            this.tiles[i] = Z.EMPTY;
+          } else if (cell.kind === mapPack.CELL.ICE) {
+            surface = BIOME_SURFACE.ICE;
+            this.tiles[i] = Z.EMPTY;
+          } else if (cell.kind === mapPack.CELL.MUD) {
+            surface = BIOME_SURFACE.MUD;
+            this.tiles[i] = Z.EMPTY;
+          } else if (cell.kind === mapPack.CELL.BRIDGE) {
+            surface = BIOME_SURFACE.BRIDGE;
+            this.tiles[i] = Z.EMPTY;
+          }
+          this.surfaceTypes[i] = surface;
+          if (surface === BIOME_SURFACE.LAVA || surface === BIOME_SURFACE.TOXIC || surface === BIOME_SURFACE.ICE || surface === BIOME_SURFACE.MUD || surface === BIOME_SURFACE.LOW_GRAVITY)
+            this.hazardTiles.push({ x: i % 44, y: (i / 44) | 0, type: surface });
+        }
+        this.mapHazards = blueprint.hazards;
+        return;
+      }
+      this.mapBlueprint = null;
+      this.biomeName = null;
+      this.biomePalette = null;
+      this.biomeGameplay = null;
+      this.mapLandmarks = [];
+      this.hazardTiles = [];
+      this.surfaceTypes.fill(BIOME_SURFACE.NONE);
       for (let t = 0; t < 60; t++) {
         let n = (e + t * 7919) | 0;
         if (this.tryGenerate(Qc(n))) {
@@ -1087,35 +1157,42 @@ var Zl = class {
       let e = 44 * Rl,
         t = al(e, e),
         n = t.getContext(`2d`),
-        r = Qc(this.seed ^ 20973);
+        r = Qc(this.seed ^ 20973),
+        palette = this.biomePalette;
       for (let e = 0; e < 44; e++)
         for (let t = 0; t < 44; t++) {
           let i = t < 2 || e < 2 || t >= 42 || e >= 42,
             a = (r() - 0.5) * 3;
           ((n.fillStyle = i
-            ? `hsl(33, 38%, ${52 + a}%)`
-            : (t + e) % 2
-              ? `hsl(37, 60%, ${66 + a}%)`
-              : `hsl(36, 57%, ${62 + a}%)`),
+            ? palette?.groundB || `hsl(33, 38%, ${52 + a}%)`
+            : palette
+              ? (t + e) % 2 ? palette.groundA : palette.groundB
+              : (t + e) % 2 ? `hsl(37, 60%, ${66 + a}%)` : `hsl(36, 57%, ${62 + a}%)`),
             n.fillRect(t * Rl, e * Rl, Rl, Rl));
         }
       for (let t = 0; t < 9e3; t++) {
         let t = r() * e,
           i = r() * e,
           a = 0.6 + r() * 1.6;
-        ((n.fillStyle = r() < 0.5 ? `rgba(120,80,30,0.16)` : `rgba(255,240,200,0.16)`),
+        ((n.globalAlpha = palette ? 0.1 : 1),
+          (n.fillStyle = palette ? (r() < 0.5 ? palette.accent : `#ffffff`) : r() < 0.5 ? `rgba(120,80,30,0.16)` : `rgba(255,240,200,0.16)`),
           n.beginPath(),
           n.arc(t, i, a, 0, 7),
-          n.fill());
+          n.fill(),
+          (n.globalAlpha = 1));
       }
       let i = al(e, e),
         a = i.getContext(`2d`);
       ((a.fillStyle = `#fff`), a.fillRect(0, 0, e, e));
       for (let e = 0; e < 44; e++)
         for (let t = 0; t < 44; t++) {
-          let n = this.tiles[Fl(t, e)];
+          let n = this.tiles[Fl(t, e)],
+            surface = this.surfaceTypes[Fl(t, e)];
           if (n === Z.WATER) a.fillStyle = `#8f7a5a`;
           else if (n === Z.BUSH) a.fillStyle = `#9fae6e`;
+          else if (surface === BIOME_SURFACE.LAVA || surface === BIOME_SURFACE.TOXIC) a.fillStyle = `#594737`;
+          else if (surface === BIOME_SURFACE.ICE) a.fillStyle = `#8ea2a8`;
+          else if (surface === BIOME_SURFACE.MUD) a.fillStyle = `#535747`;
           else continue;
           a.fillRect(t * Rl - 3, e * Rl - 3, 38, 38);
         }
@@ -1558,13 +1635,13 @@ varying vec3 vBladeWorld;`,
       if (!e) return;
       let t = Xl(),
         n = new Nr({
-          color: 2072516,
+          color: this.biomePalette?.liquid || 2072516,
           roughness: 0.07,
           metalness: 0.05,
           normalMap: t,
           normalScale: new V(0.55, 0.55),
           envMapIntensity: 1.6,
-          emissive: 407631,
+          emissive: this.biomePalette?.liquid || 407631,
           emissiveIntensity: 0.35,
         }),
         r = new yr(44, 44).rotateX(-Math.PI / 2),
@@ -1576,6 +1653,58 @@ varying vec3 vBladeWorld;`,
         (this.water = i),
         (this.waterNormal = t),
         this.disposables.push(r, n, t));
+    }
+    buildBiomeSurfaces() {
+      if (!this.hazardTiles.length) return;
+      let geometry = new yr(0.96, 0.96).rotateX(-Math.PI / 2),
+        styles = {
+          [BIOME_SURFACE.LAVA]: { name: `lava`, color: 0xb83d20, emissive: 0xff3b09, intensity: 0.78 },
+          [BIOME_SURFACE.TOXIC]: { name: `toxic`, color: 0x667a38, emissive: 0x73d72d, intensity: 0.4 },
+          [BIOME_SURFACE.ICE]: { name: `ice`, color: 0xb9e4ed, emissive: 0x68adbf, intensity: 0.18 },
+          [BIOME_SURFACE.MUD]: { name: `mud`, color: 0x514d38, emissive: 0x1c2412, intensity: 0.08 },
+          [BIOME_SURFACE.LOW_GRAVITY]: { name: `gravity`, color: 0x5549aa, emissive: 0x766bff, intensity: 0.62 },
+        };
+      this.disposables.push(geometry);
+      for (let [surface, style] of Object.entries(styles)) {
+        let tiles = this.hazardTiles.filter((tile) => tile.type === +surface);
+        if (!tiles.length) continue;
+        let material = new Nr({
+            color: style.color,
+            emissive: style.emissive,
+            emissiveIntensity: style.intensity,
+            roughness: surface === `${BIOME_SURFACE.ICE}` ? 0.3 : 0.82,
+            metalness: 0,
+          }),
+          mesh = new Yn(geometry, material, tiles.length);
+        (mesh.castShadow = !1),
+          (mesh.receiveShadow = !1),
+          (mesh.name = `biome-${style.name}`);
+        tiles.forEach((tile, index) => {
+          (Bl.makeTranslation(this.center(tile.x), 0.022, this.center(tile.y)), mesh.setMatrixAt(index, Bl));
+        });
+        (mesh.instanceMatrix.needsUpdate = !0,
+          mesh.computeBoundingSphere(),
+          this.group.add(mesh),
+          (this.meshes[mesh.name] = mesh),
+          this.disposables.push(material));
+        this.hazardMeshes.push({ material, intensity: style.intensity, type: +surface });
+      }
+      let bridges = this.surfaceTypes.reduce((count, surface) => count + +(surface === BIOME_SURFACE.BRIDGE), 0);
+      if (bridges) {
+        let material = new Nr({ color: this.biomePalette?.accent || 0xa7a092, roughness: 0.92, metalness: 0 }),
+          mesh = new Yn(geometry, material, bridges),
+          index = 0;
+        (mesh.castShadow = !1), (mesh.receiveShadow = !1), (mesh.name = `biome-bridge`);
+        for (let tile = 0; tile < this.surfaceTypes.length; tile++)
+          if (this.surfaceTypes[tile] === BIOME_SURFACE.BRIDGE) {
+            (Bl.makeTranslation(this.center(tile % 44), 0.026, this.center((tile / 44) | 0)), mesh.setMatrixAt(index++, Bl));
+          }
+        (mesh.instanceMatrix.needsUpdate = !0,
+          mesh.computeBoundingSphere(),
+          this.group.add(mesh),
+          (this.meshes[mesh.name] = mesh),
+          this.disposables.push(material));
+      }
     }
     buildLamps() {
       let e = this.lampTiles.length,
@@ -1776,11 +1905,14 @@ varying vec3 vBladeWorld;`,
       return i || { x: e, z: t };
     }
     update(e, t) {
-      ((this.grassUniforms.uTime.value = t),
-        this.waterNormal && this.waterNormal.offset.set(t * 0.021, t * 0.013),
-        this.aoDirty
-          ? ((this.aoTimer -= e), this.aoTimer <= 0 && (this.rebakeGround(), (this.aoDirty = !1), (this.aoTimer = 0.3)))
-          : (this.aoTimer = Math.max(0, this.aoTimer - e)));
+      ((this.grassUniforms.uTime.value = t), this.waterNormal && this.waterNormal.offset.set(t * 0.021, t * 0.013));
+      for (let i = 0; i < this.hazardMeshes.length; i++) {
+        let hazard = this.hazardMeshes[i];
+        hazard.material.emissiveIntensity = hazard.intensity * (0.9 + Math.sin(t * (hazard.type === BIOME_SURFACE.LAVA ? 4 : 2.4)) * 0.1);
+      }
+      this.aoDirty
+        ? ((this.aoTimer -= e), this.aoTimer <= 0 && (this.rebakeGround(), (this.aoDirty = !1), (this.aoTimer = 0.3)))
+        : (this.aoTimer = Math.max(0, this.aoTimer - e));
     }
     dispose() {
       this.scene.remove(this.group);

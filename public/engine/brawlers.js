@@ -267,6 +267,7 @@ var du = 1,
         (this.lastHitTime = -10),
         (this.regenT = 0),
         (this.inBush = !1),
+        (this.hazardTime = 0),
         (this.revealT = 0),
         (this.hidden = !1),
         (this.flash = 0),
@@ -347,7 +348,7 @@ var du = 1,
       } else if (e.kind === `leap`) {
         let a = $c(Math.hypot(r - this.x, i - this.z), 2, e.range),
           o = this.game.world.nearestOpen(this.x + t * a, this.z + n * a);
-        ((this.leap = { a: e, t: 0, sx: this.x, sz: this.z, tx: o.x, tz: o.z }),
+        ((this.leap = { a: e, t: 0, sx: this.x, sz: this.z, tx: o.x, tz: o.z, gravity: this.game.world.gravityAt(this.x, this.z) }),
           this.game.effects.dust(this.x, this.z, 10, 2.4),
           this.game.audio.play(`leap`, this.x, this.z));
       }
@@ -419,11 +420,13 @@ var du = 1,
         (this.game.hud.floatText(this.x, 1.7, this.z, `+${n}`, `heal`), this.game.effects.healPuff(this.x, this.z));
     }
     addCube() {
+      if (this.game.modeName === `deathmatch` && this.cubes >= this.game.mode.powerUpCap) return !1;
       this.cubes++;
       let e = this.hp / this.maxHp;
       ((this.maxHp += Lc.cubeHp),
         (this.hp = Math.min(this.maxHp, Math.round(this.maxHp * e) + Lc.cubeHp * 0.5)),
         (this.squash = -1));
+      return !0;
     }
     die(e) {
       this.alive &&
@@ -472,10 +475,12 @@ var du = 1,
       if (this.leap) {
         let i = this.leap;
         i.t += e;
-        let a = $c(i.t / i.a.flight, 0, 1);
+        let gravity = i.gravity || 1,
+          duration = i.a.flight / Math.sqrt(gravity),
+          a = $c(i.t / duration, 0, 1);
         ((r.x = el(i.sx, i.tx, a)),
           (r.z = el(i.sz, i.tz, a)),
-          (r.y = Math.sin(a * Math.PI) * 3.4),
+          (r.y = Math.sin(a * Math.PI) * 3.4 / gravity),
           (n.body.rotation.x = a * Math.PI * 2),
           (this.aimAngle = Math.atan2(i.tx - i.sx, i.tz - i.sz)),
           (this.aimHold = 0.3),
@@ -487,16 +492,32 @@ var du = 1,
             t.world.resolveCircle(r, Ic),
             t.combat.explode(r.x, r.z, i.a, this, !0, !0)));
       } else {
-        let n = this.def.speed;
+        let world = t.world,
+          gameplay = world.biomeGameplay,
+          surface = world.surfaceAt(r.x, r.z),
+          n = this.def.speed * (gameplay?.moveMultiplier ?? 1);
         (this.burst && this.burst.a.kind !== `melee` && (n *= 0.82),
           t.state === `countdown` && (n = 0),
-          this.vel.set(this.moveX * n, this.moveZ * n));
+          surface === BIOME_SURFACE.MUD && (n *= gameplay?.mudMoveMultiplier ?? 1));
+        if (surface === BIOME_SURFACE.ICE) {
+          let traction = gameplay?.iceFriction ?? gameplay?.friction ?? 1,
+            blend = 1 - Math.exp(-18 * Math.max(0.05, traction) * e);
+          ((this.vel.x += (this.moveX * n - this.vel.x) * blend), (this.vel.y += (this.moveZ * n - this.vel.y) * blend));
+        } else this.vel.set(this.moveX * n, this.moveZ * n);
         let i = this.knock.x,
           a = this.knock.y;
         ((r.x += (this.vel.x + i) * e), (r.z += (this.vel.y + a) * e));
-        let o = Math.exp(-7 * e);
+        let o = Math.exp(-7 * (gameplay?.friction ?? 1) * e);
         (this.knock.multiplyScalar(o), t.world.resolveCircle(r, Ic));
       }
+      let hazardDamage = t.world.hazardDamageAt(r.x, r.z);
+      if (hazardDamage > 0) {
+        if (((this.hazardTime += e), this.hazardTime >= 0.2)) {
+          let elapsed = this.hazardTime;
+          ((this.hazardTime %= 0.2), this.takeDamage(Math.max(1, Math.round(hazardDamage * elapsed)), null, !0));
+          if (!this.alive) return;
+        }
+      } else this.hazardTime = 0;
       let i = this.vel.lengthSq() > 0.2 && !this.leap,
         a = this.aimHold > 0 ? this.aimAngle : i ? Math.atan2(this.vel.x, this.vel.y) : this.facing;
       ((this.facing = il(this.facing, a, this.aimHold > 0 ? 26 : 13, e)), (this.root.rotation.y = this.facing));

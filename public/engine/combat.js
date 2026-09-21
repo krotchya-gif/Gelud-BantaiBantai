@@ -381,8 +381,8 @@ var Su = class {
         ) {
           for (let e of t.brawlers)
             if (e.alive && !e.airborne && Math.hypot(e.x - n.x, e.z - n.z) < 0.78) {
+              if (!e.addCube()) continue;
               ((n.alive = !1),
-                e.addCube(),
                 t.scene.remove(n.mesh),
                 (n.mesh.visible = !1),
                 this.cubePool.push(n),

@@ -28,11 +28,14 @@ var  Ru = 9,
       ((this.skill = Q(n, r)), (this.thrower = t.def.attack.kind === `lob`));
     }
     canSee(e, t) {
-      return t > Ru || (e.inBush && t > Bu && e.revealT <= 0)
+      let gameplay = this.game.world.biomeGameplay,
+        vision = gameplay?.vision ?? 1,
+        concealment = gameplay?.bushConcealment ?? 1;
+      return t > Ru * vision || (e.inBush && t > Bu * concealment && e.revealT <= 0)
         ? !1
-        : this.thrower && t < 8
+        : this.thrower && t < 8 * vision
           ? !0
-          : t < 2.5 || this.game.world.hasLineOfSight(this.b.x, this.b.z, e.x, e.z);
+          : t < 2.5 * vision || this.game.world.hasLineOfSight(this.b.x, this.b.z, e.x, e.z);
     }
     seesBox(e) {
       let t = this.game.world.raycast(this.b.x, this.b.z, e.x, e.z);
@@ -89,9 +92,11 @@ var  Ru = 9,
       } else {
         let i = null,
           a = 9;
-        for (let n of t.combat.cubes) {
-          let t = sl(e.x, e.z, n.x, n.z);
-          t < a && r.depthAt(n.x, n.z) < -0.5 && ((i = n), (a = t));
+        if (t.modeName !== `deathmatch` || e.cubes < t.mode.powerUpCap) {
+          for (let n of t.combat.cubes) {
+            let t = sl(e.x, e.z, n.x, n.z);
+            t < a && r.depthAt(n.x, n.z) < -0.5 && ((i = n), (a = t));
+          }
         }
         if (i) ((l = `cube`), (c = { x: i.x, z: i.z }));
         else {
@@ -510,7 +515,7 @@ var  Ru = 9,
       let modeDescriptions = {
         classic: `Last brawler standing. Poison gas closes in.`,
         blitz: `A faster survival round with less time to loot.`,
-        deathmatch: `50 KOs or 5:00 · respawn in 3s · shield for 2s.`,
+        deathmatch: `50 KOs or 5:00 · power-up cap lvl 10 · respawn in 5s · shield for 2s.`,
       };
       for (let [t, n] of Object.entries(MATCH_MODES)) {
         let r = document.createElement(`button`);

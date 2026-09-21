@@ -164,10 +164,12 @@ var Yc = {
           (this.gtao = e));
       }
       this.bloom = null;
-      (e.bloom && this.toggles.bloom && ((this.bloom = new Mc(new V(a.x, a.y), 0.5, 0.72, 1.2)), o.addPass(this.bloom)),
-        (this.grade = new gc(Xc)),
-        o.addPass(this.grade),
-        o.addPass(new Pc()));
+      e.bloom && this.toggles.bloom && ((this.bloom = new Mc(new V(a.x, a.y), 0.5, 0.72, 1.2)), o.addPass(this.bloom));
+      this.grade = null;
+      if (!(window.matchMedia && window.matchMedia(`(pointer: coarse)`).matches)) {
+        ((this.grade = new gc(Xc)), o.addPass(this.grade));
+      }
+      o.addPass(new Pc());
     }
     setToggle(e, t) {
       this.toggles[e] = t;

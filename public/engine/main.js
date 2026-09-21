@@ -10,7 +10,8 @@ MATCH_MODES.deathmatch = {
   label: `Deathmatch`,
   targetKills: 50,
   timeLimit: 300,
-  respawnDelay: 3,
+  powerUpCap: 10,
+  respawnDelay: 5,
   spawnProtection: 2,
   deathmatch: !0,
 };
@@ -85,6 +86,8 @@ var ld = class {
       (this.pendingResult = null),
       (this.countdownT = 0),
       (this.lastCount = 0),
+      (this.lastRespawnCountdown = 0),
+      (this.lastShieldCountdown = 0),
       (this.camZoom = parseFloat(this.params.get(`zoom`)) || 1),
       (this.paused = !1),
       (this.simSteps = $c(parseInt(this.params.get(`speed`), 10) || 1, 1, 16)),
@@ -105,6 +108,7 @@ var ld = class {
       (this.fixedSeed = Number.isFinite(a) ? a : null),
       (this.maxAniso = this.pipeline.renderer.capabilities?.getMaxAnisotropy?.() ?? 4),
       (this.world = new Zl(this.scene, this.nextSeed, this.maxAniso, this.arenaName)),
+      this.lighting.setBiomePalette(this.world.biomePalette),
       this.lighting.setLamps(this.world.lanterns, this.world.lampGlass),
       (this.effects = new Nu(this)),
       (this.combat = new Su(this)),
@@ -266,6 +270,7 @@ var ld = class {
       (this.nextSeed = this.fixedSeed === null ? (Math.random() * 1e9) | 0 : this.fixedSeed),
       (this.fixedSeed = null),
       (this.world = new Zl(this.scene, this.nextSeed, this.maxAniso, this.arenaName)),
+      this.lighting.setBiomePalette(this.world.biomePalette),
       this.lighting.setLamps(this.world.lanterns, this.world.lampGlass),
       this.effects.rebuildFireflies());
   }
@@ -328,6 +333,8 @@ var ld = class {
       (this.state = `countdown`),
       (this.countdownT = 3.4),
       (this.lastCount = 4),
+      (this.lastRespawnCountdown = 0),
+      (this.lastShieldCountdown = 0),
       (this.matchTime = 0),
       (this.pendingResult = null),
       (this.shakeAmp = 0),
@@ -397,7 +404,6 @@ var ld = class {
       (i.pathI = 0),
       (i.repathT = 0),
       (i.thinkT = 0.2));
-    e.isPlayer && this.hud.banner(`RESPAWNED · SHIELD 2s`, 1.3, !0);
   }
   endDeathmatch() {
     if (this.modeName !== `deathmatch` || this.state !== `playing` || !this.player) return;
@@ -412,6 +418,27 @@ var ld = class {
   }
   onPlayerHurt(e) {
     (this.hud.flashHurt(e), this.vibrate(e > 900 ? [24, 28, 32] : 18), (this.shakeAmp = Math.max(this.shakeAmp, 0.07)));
+  }
+  updateRespawnCountdown() {
+    if (this.modeName !== `deathmatch` || this.state !== `playing` || !this.player) {
+      ((this.lastRespawnCountdown = 0), (this.lastShieldCountdown = 0));
+      return;
+    }
+    let e = this.player;
+    if (!e.alive) {
+      this.lastShieldCountdown = 0;
+      let t = Math.max(0, Math.ceil(this.mode.respawnDelay - e.deadT));
+      t > 0 &&
+        t !== this.lastRespawnCountdown &&
+        ((this.lastRespawnCountdown = t), this.hud.banner(`RESPAWNING IN ${t}s`, 1.05, !0));
+      return;
+    }
+    this.lastRespawnCountdown = 0;
+    let t = Math.max(0, Math.ceil(e.spawnT));
+    t > 0 &&
+      t !== this.lastShieldCountdown &&
+      ((this.lastShieldCountdown = t), this.hud.banner(`INVINCIBLE · ${t}s`, 1.05, !0));
+    t === 0 && (this.lastShieldCountdown = 0);
   }
   onBrawlerDown(e, t) {
     let n = this.brawlers.reduce((e, t) => e + +!!t.alive, 0);
@@ -432,7 +459,6 @@ var ld = class {
     )
       return;
     if (this.modeName === `deathmatch`) {
-      e.isPlayer && this.hud.banner(`RESPAWNING IN 3s`, 2.9, !0);
       if (t && t.kills >= this.mode.targetKills) this.endDeathmatch();
       return;
     }
@@ -638,11 +664,12 @@ var ld = class {
   updateVisibility() {
     let e = this.player && this.player.alive ? this.player : null,
       t = this.world.grassUniforms.uPushers.value,
+      concealment = this.world.biomeGameplay?.bushConcealment ?? 1,
       n = 0;
     for (let r of this.brawlers) {
       let i = !1;
       if (
-        (e && r !== e && r.alive && r.inBush && r.revealT <= 0 && (i = sl(e.x, e.z, r.x, r.z) > 2.4),
+        (e && r !== e && r.alive && r.inBush && r.revealT <= 0 && (i = sl(e.x, e.z, r.x, r.z) > 2.4 * concealment),
         (r.hidden = i),
         r.alive && (r.root.visible = !i),
         n < 8)
@@ -736,6 +763,7 @@ var ld = class {
       for (let t of this.brawlers) t.update(e);
       this.separateBrawlers();
       this.combat.update(e);
+      this.updateRespawnCountdown();
       if (this.state !== `menu` && this.modeName !== `deathmatch`) {
         let t = this.gas.active;
         (this.gas.update(e, this.matchTime),

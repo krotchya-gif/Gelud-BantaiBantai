@@ -1,6 +1,7 @@
 const legacyScripts = [
   'engine/three-legacy.js',
   'engine/render-pipeline.js',
+  'engine/map-biomes.js',
   'engine/world.js',
   'engine/brawlers.js',
   'engine/combat.js',
