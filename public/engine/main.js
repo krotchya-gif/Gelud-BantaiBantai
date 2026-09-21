@@ -301,15 +301,20 @@ var ld = class {
     let r = !!e;
     if (r && ![`countdown`, `playing`].includes(this.state)) return !1;
     let changed = this.paused !== r;
+    r && this.input.cancelActions();
     ((this.paused = r),
-      $(`pause-btn`).classList.toggle(`is-paused`, r),
-      $(`pause-btn`).setAttribute(`aria-label`, r ? `Resume game` : `Pause game`),
-      $(`pause-btn`).setAttribute(`title`, r ? `Resume` : `Pause`),
+      [`pause-btn`, `desktop-pause-btn`].forEach((id) => {
+        let button = $(id);
+        button.classList.toggle(`is-paused`, r);
+        button.setAttribute(`aria-label`, r ? `Resume game` : `Pause game`);
+        button.setAttribute(`title`, r ? `Resume` : `Pause`);
+      }),
       this.hud.showPause(r, n),
       changed && t && this.hud.toast(r ? `Paused - press P or Escape to resume` : `Resumed`));
     return !0;
   }
   toMenu() {
+    this.input.cancelActions();
     this.setPaused(!1, !1, !1);
     ((this.state = `menu`),
       document.body.classList.remove(`playing`),
@@ -320,6 +325,7 @@ var ld = class {
       (this.attractT = 0));
   }
   startMatch(e) {
+    this.input.cancelActions();
     (this.audio.unlock(),
       this.audio.play(`click`),
       this.setPaused(!1, !1, !1),
@@ -371,6 +377,16 @@ var ld = class {
       (e.fireCooldown = 0),
       (e.burst = null),
       (e.leap = null),
+      (e.dash = null),
+      (e.parryT = 0),
+      (e.slowT = 0),
+      (e.speedBoostT = 0),
+      (e.stationaryT = 0),
+      (e.isCharging = !1),
+      (e.chargeLevel = 0),
+      (e.voltChain = 0),
+      (e.lastVoltTarget = null),
+      e.scatterHits.clear(),
       (e.aimHold = 0),
       (e.regenT = 0),
       (e.lastAttacker = null),
@@ -516,9 +532,14 @@ var ld = class {
   setupGuideFor(e) {
     for (let t of [`attack`, `super`]) {
       let n = e[t];
-      n.kind === `spread` &&
+      (n.kind === `spread` || n.arc) &&
         (this.sectorGeos[t] && this.sectorGeos[t].dispose(),
-        (this.sectorGeos[t] = new mr(1, 28, -n.spread / 2 - 0.07, n.spread + 0.14).rotateX(-Math.PI / 2)));
+        (this.sectorGeos[t] = new mr(
+          1,
+          28,
+          n.kind === `spread` ? -n.spread / 2 - 0.07 : -n.arc / 2,
+          n.kind === `spread` ? n.spread + 0.14 : n.arc,
+        ).rotateX(-Math.PI / 2)));
     }
   }
   updateGuide(e, t, n, r, i, a) {
@@ -527,13 +548,22 @@ var ld = class {
     ((s.visible = !0), s.position.set(o.x, 0.06, o.z), (s.rotation.y = Math.atan2(n, r) - Math.PI / 2));
     let c = a ? 16765498 : 16777215,
       l = a ? 0.34 : 0.17;
-    if (((this.guideRect.visible = this.guideSector.visible = this.guideCircle.visible = !1), e.kind === `spread`))
+    if (((this.guideRect.visible = this.guideSector.visible = this.guideCircle.visible = !1),
+      e.kind === `spread` || e.arc))
       ((this.guideSector.geometry = this.sectorGeos[t]),
         this.guideSector.scale.setScalar(e.range),
         (this.guideSector.visible = !0),
         this.guideSector.material.color.set(c),
         (this.guideSector.material.opacity = l));
-    else if (e.kind === `burst` || e.kind === `melee`) {
+    else if (e.kind === `dash`) {
+      let t = Math.min(i, e.range),
+        hit = this.world.raycast(o.x, o.z, o.x + n * t, o.z + r * t);
+      hit && (t = Math.max(0.3, hit.dist - 0.3));
+      (this.guideRect.scale.set(t, 1, 0.16),
+        (this.guideRect.visible = !0),
+        this.guideRect.material.color.set(c),
+        (this.guideRect.material.opacity = l));
+    } else if (e.kind === `burst` || e.kind === `melee`) {
       let t = e.range,
         i = this.world.raycast(o.x, o.z, o.x + n * e.range, o.z + r * e.range);
       (i && !(e.breaksWalls && this.world.isBreakable(i.tx, i.ty)) && (t = Math.max(0.6, i.dist)),
@@ -558,17 +588,28 @@ var ld = class {
   controlPlayer() {
     let e = this.player;
     if (!e || !e.alive || (this.state !== `playing` && this.state !== `countdown`)) {
-      ((this.guide.visible = !1), e && (e.moveX = e.moveZ = 0), this.input.takeShots());
+      ((this.guide.visible = !1),
+        e && ((e.moveX = e.moveZ = 0), (e.isCharging = !1), (e.chargeLevel = 0)),
+        this.input.cancelActions());
       return;
     }
     let t = this.input,
       n = t.axis();
     ((e.moveX = n.x), (e.moveZ = n.z));
+    let charging = e.def.id === `syafiah` && this.state === `playing` && (t.touchMode ? t.sticks.aim.id !== null : t.fire && !t.superHeld),
+      chargeStartedAt = t.touchMode ? t.sticks.aim.startedAt : t.fireStartedAt;
+    ((e.isCharging = charging),
+      (e.chargeLevel = charging
+        ? $c((performance.now() - chargeStartedAt) / (e.def.attack.chargeTime * 1000), 0, 1)
+        : 0));
     for (let n of t.takeShots()) {
       if (n.cancelled) continue;
       let t = n.kind === `super` ? e.def.super : e.def.attack,
         r = n.tap ? this.autoAim(t) : this.stickAim(n, t);
-      let i = n.kind === `super` ? e.useSuper(r.dx, r.dz, r.x, r.z) : e.attack(r.dx, r.dz, r.x, r.z);
+      let i =
+        n.kind === `super`
+          ? e.useSuper(r.dx, r.dz, r.x, r.z)
+          : e.attack(r.dx, r.dz, r.x, r.z, n.held);
       i && this.vibrate(n.kind === `super` ? [18, 22, 32] : 10);
     }
     if (t.touchMode) {
@@ -593,8 +634,12 @@ var ld = class {
       a = Math.hypot(r, i) || 1;
     ((r /= a), (i /= a));
     let o = t.consumeSuperRelease(),
-      s = t.superHeld && e.superReady;
-    o && e.superReady ? e.useSuper(r, i, ad.x, ad.z) : t.fire && !s && e.attack(r, i, ad.x, ad.z);
+      s = t.superHeld && e.superReady,
+      releasedFire = t.consumeFireRelease();
+    if (o && e.superReady) e.useSuper(r, i, ad.x, ad.z);
+    else if (!s && e.def.id === `syafiah`) {
+      releasedFire !== null && e.attack(r, i, ad.x, ad.z, releasedFire);
+    } else if (t.fire && !s) e.attack(r, i, ad.x, ad.z);
     let c = s ? `super` : `attack`;
     e.airborne ? (this.guide.visible = !1) : this.updateGuide(e.def[c], c, r, i, a, s);
   }

@@ -26,6 +26,15 @@ body.left-handed.touch #super{right:auto;left:calc(172px + var(--sa-l))}
 .menu-group{width:min(100%,1100px)}
 .menu-group h2{color:var(--gold);letter-spacing:.8px;margin:2px 0 6px;font-size:16px;font-weight:400}
 .choice-cards{display:flex;justify-content:center;gap:8px;width:100%}
+
+#desktop-actions{top:calc(14px + var(--sa-t));right:calc(70px + var(--sa-r));z-index:31;align-items:center;gap:7px;display:none;position:fixed}
+#desktop-actions>button{border:3px solid var(--ink);background:var(--panel);color:var(--paper);pointer-events:auto;cursor:pointer;border-radius:12px;place-items:center;width:40px;height:40px;margin:0;padding:0;position:static;box-shadow:0 4px #00000059}
+#desktop-actions>button:hover{background:#2a1f52;transform:translateY(-1px)}
+#desktop-actions>button:active{background:var(--plum);transform:translateY(2px);box-shadow:0 2px #00000059}
+#desktop-actions svg{pointer-events:none;width:22px;height:22px;display:block}
+#desktop-pause-btn .play-icon{display:none}#desktop-pause-btn.is-paused .pause-icon{display:none}#desktop-pause-btn.is-paused .play-icon{display:block}
+@media (min-width:701px){body.playing:not(.touch) #desktop-actions{display:flex}}
+@media (max-height:520px){#desktop-actions{top:calc(8px + var(--sa-t));right:calc(64px + var(--sa-r));gap:6px}#desktop-actions>button{width:38px;height:38px;border-radius:11px}#desktop-actions svg{width:21px;height:21px}}
 .choice-card{border:3px solid var(--ink);background:var(--panel);color:var(--paper);cursor:pointer;display:flex;flex:1;flex-direction:column;justify-content:center;gap:4px;min-height:62px;max-width:360px;padding:7px 12px;border-radius:13px;font-family:inherit;text-align:center;transition:transform .12s,border-color .12s,box-shadow .12s}
 .choice-card:hover{transform:translateY(-2px)}
 .choice-card.on{border-color:var(--gold);box-shadow:0 0 18px #ffc93a66;background:#2a1f52}
@@ -54,8 +63,14 @@ body.deathmatch #feed{top:218px}
   #dm-leaderboard{top:calc(53px + var(--sa-t));left:calc(8px + var(--sa-l));width:146px;padding:6px 8px}
   #dm-leaderboard h2{font-size:12px}
   #dm-leaderboard li{font-size:10px}
-  body.deathmatch #feed{top:190px}
+body.deathmatch #feed{top:190px}
 }
+
+.brawler-group #cards .card .stat span{width:66px}
+.card .passive{color:#e8e2ff;font-family:var(--body);font-size:10.5px;font-weight:700;line-height:1.25;margin-top:7px;min-height:2.5em;text-align:left}
+.card .passive b{color:var(--gold);font-family:var(--font);font-size:10px;font-weight:400}
+@media (max-width:700px){.card .passive{font-size:9.5px;min-height:2.2em;margin-top:5px}.card .passive b{font-size:9px}}
+@media (max-height:520px){.card .passive{display:none}}
 @media (max-height:520px){
   #menu{gap:3px;padding-top:calc(6px + var(--sa-t));padding-bottom:calc(6px + var(--sa-b))}
   #tagline{margin:3px 0;font-size:12px}

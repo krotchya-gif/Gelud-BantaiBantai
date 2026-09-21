@@ -171,6 +171,56 @@ function uu(e, t) {
         [-1.34, 0.22],
         [-1.34, -0.22],
       ]));
+  } else if (e.id === "naka") {
+    (s(d, ru(0.34, 0.1, 0.12), r.accent, 0, -0.17, 0.18),
+      s(d, ru(0.27, 0.07, 0.05), r.dark, 0, -0.14, 0.27),
+      s(d, ru(0.22, 0.12, 0.1), r.dark, 0, -0.18, -0.18));
+    h.position.set(0.3, 0.68, 0.26);
+    for (let e = 0; e < 4; e++) {
+      let t = s(h, ru(0.055, 0.25, 0.045), e % 2 ? r.accent : r.metal, 0, 0.02, 0.13);
+      t.rotation.z = e * Math.PI / 4;
+    }
+    (s(h, eu(0.075, 12, 8), r.dark, 0, 0.03, 0.13),
+      s(h, ru(0.08, 0.13, 0.08), r.dark, 0, -0.12, -0.04),
+      g.push(new H(0.3, 0.72, 0.55)),
+      (_.armBase = [
+        [-1.15, 0.18],
+        [-1.28, -0.18],
+      ]),
+      (_.swingLeft = !0));
+  } else if (e.id === "ello") {
+    (s(d, ru(0.48, 0.08, 0.12), r.accent, 0, 0.17, -0.06),
+      s(d, ru(0.18, 0.12, 0.07), r.dark, 0, 0.2, 0.13),
+      s(d, nu(0.06, 0.06, 0.27, 10), r.accent, 0, 0.37, -0.02));
+    h.position.set(0.34, 0.69, 0.25);
+    let e = s(h, ru(0.045, 0.045, 0.63), r.white, 0, 0.01, 0.22);
+    e.rotation.x = 0.16;
+    (s(h, ru(0.17, 0.055, 0.06), r.metal, 0, -0.02, -0.06),
+      s(h, ru(0.065, 0.055, 0.2), r.dark, 0, -0.01, -0.25),
+      s(d, ru(0.3, 0.12, 0.12), r.body, 0, -0.23, -0.13),
+      g.push(new H(0.34, 0.73, 0.54)),
+      (_.armBase = [
+        [-1.18, 0.12],
+        [-1.3, -0.2],
+      ]),
+      (_.swingLeft = !0));
+  } else if (e.id === "syafiah") {
+    (s(d, iu(0.3, 0.52), r.accent, 0, 0.01, -0.02),
+      s(d, ru(0.32, 0.09, 0.12), r.dark, 0, -0.19, 0.17),
+      s(o, ru(0.25, 0.1, 0.2), r.dark, 0, 0.73, -0.17));
+    h.position.set(0.3, 0.68, 0.25);
+    for (let e = 0; e < 3; e++) {
+      let t = s(h, ru(0.035, 0.04, 0.23), r.wood, e * 0.1 - 0.1, 0.02, 0.18 + Math.abs(e - 1) * 0.1);
+      t.rotation.y = (e - 1) * 0.22;
+    }
+    (s(h, nu(0.025, 0.025, 0.4, 8), r.metal, 0, 0.01, 0.22).rotation.x = Math.PI / 2,
+      s(h, ru(0.025, 0.035, 0.47), r.white, 0, 0.04, 0.25),
+      g.push(new H(0.3, 0.72, 0.55)),
+      (_.armBase = [
+        [-1.12, 0.18],
+        [-1.32, -0.16],
+      ]),
+      (_.swingLeft = !0));
   } else {
     (s(d, eu(0.2), r.skin, 0, -0.085, 0.2, 1, 0.78, 0.5), s(d, ru(0.065, 0.2, 0.44), r.accent, 0, 0.27, -0.02));
     for (let e of [-1, 1]) s(o, eu(0.14), r.accent, e * 0.37, 0.88, 0);
@@ -261,6 +311,18 @@ var du = 1,
         (this.fireCooldown = 0),
         (this.burst = null),
         (this.leap = null),
+        (this.dash = null),
+        (this.parryT = 0),
+        (this.isCharging = !1),
+        (this.chargeLevel = 0),
+        (this.slowT = 0),
+        (this.speedBoostT = 0),
+        (this.stationaryT = 0),
+        (this.attackSerial = 0),
+        (this.lastVoltTarget = null),
+        (this.lastVoltHit = -10),
+        (this.voltChain = 0),
+        (this.scatterHits = new Map()),
         (this.muzzleIndex = 0),
         (this.lastCombat = -10),
         (this.lastAttacker = null),
@@ -302,22 +364,90 @@ var du = 1,
       return (e.set(this.x + n.x * r + n.z * i, n.y, this.z - n.x * i + n.z * r), e);
     }
     canAct() {
-      return this.alive && !this.leap && this.game.state !== `countdown`;
+      return this.alive && !this.leap && !this.dash && this.game.state !== `countdown`;
     }
-    attack(e, t, n, r) {
+    attack(e, t, n, r, chargeDuration) {
       return !this.canAct() || this.ammo < 1 || this.fireCooldown > 0 || this.burst
         ? !1
-        : (--this.ammo, this.startVolley(this.def.attack, e, t, n, r, !1), !0);
+        : (--this.ammo,
+          (() => {
+            let attack = this.def.attack;
+            if (this.def.id === `syafiah`) {
+              let held = Number.isFinite(chargeDuration) ? chargeDuration : attack.chargeTime,
+                charge = $c(held / attack.chargeTime, 0.25, 1),
+                range = this.game.world.surfaceAt(this.x, this.z) === BIOME_SURFACE.LOW_GRAVITY
+                  ? (this.def.terrainAffinity?.rangeMultiplier ?? 1.1)
+                  : 1;
+              attack = {
+                ...attack,
+                damage: Math.round(attack.damage * (0.52 + charge * 0.48) * (held >= 0.68 && held <= 0.82 ? 1.1 : 1)),
+                range: attack.range * range,
+                speed: attack.speed * (0.9 + charge * 0.1),
+              };
+            } else if (this.def.id === `ace` && this.stationaryT >= 0.45) {
+              attack = { ...attack, damage: Math.round(attack.damage * 1.1) };
+              this.stationaryT = 0;
+            }
+            this.startVolley(attack, e, t, n, r, !1);
+            this.isCharging = !1;
+            this.chargeLevel = 0;
+          })(),
+          !0);
     }
     useSuper(e, t, n, r) {
-      return !this.canAct() || !this.superReady || this.burst
-        ? !1
-        : ((this.superCharge = 0), this.startVolley(this.def.super, e, t, n, r, !0), this.game.audio.play(`super`), !0);
+      if (!this.canAct() || !this.superReady || this.burst) return !1;
+      let attack = this.def.super;
+      if (
+        this.def.id === `syafiah` &&
+        this.game.world.surfaceAt(this.x, this.z) === BIOME_SURFACE.LOW_GRAVITY
+      )
+        attack = { ...attack, range: attack.range * (this.def.terrainAffinity?.rangeMultiplier ?? 1.1) };
+      if (attack.kind === `dash`) {
+        if (!this.startDash(attack, e, t, n, r)) return !1;
+      } else if (attack.kind === `parry`) {
+        let length = Math.hypot(e, t) || 1;
+        ((e /= length),
+          (t /= length),
+          (this.aimAngle = Math.atan2(e, t)),
+          (this.facing = this.aimAngle),
+          (this.root.rotation.y = this.facing),
+          (this.aimHold = attack.duration),
+          (this.parryT = attack.duration),
+          (this.recoil = 1),
+          this.game.effects.impact(this.x + e * 0.65, 0.72, this.z + t * 0.65, this.superColor, 8));
+      } else this.startVolley(attack, e, t, n, r, !0);
+      return ((this.superCharge = 0), this.game.audio.play(`super`), !0);
+    }
+    startDash(attack, dx, dz, targetX, targetZ) {
+      let directionLength = Math.hypot(dx, dz) || 1;
+      ((dx /= directionLength), (dz /= directionLength));
+      let length = Math.min(attack.range, Math.hypot(targetX - this.x, targetZ - this.z));
+      if (length < 0.2) return !1;
+      let hit = this.game.world.raycast(this.x, this.z, this.x + dx * length, this.z + dz * length);
+      hit && (length = Math.max(0, hit.dist - 0.34));
+      if (length < 0.2) return !1;
+      this.dash = {
+        attack,
+        sx: this.x,
+        sz: this.z,
+        tx: this.x + dx * length,
+        tz: this.z + dz * length,
+        dx,
+        dz,
+        t: 0,
+        duration: attack.flight,
+      };
+      (this.aimAngle = Math.atan2(dx, dz),
+        (this.aimHold = attack.flight),
+        (this.lastCombat = this.game.elapsed),
+        this.game.effects.dust(this.x, this.z, 6, 1.8));
+      return !0;
     }
     startVolley(e, t, n, r, i, a) {
       let o = Math.hypot(t, n) || 1;
       ((t /= o),
         (n /= o),
+        (this.attackSerial++),
         (this.aimAngle = Math.atan2(t, n)),
         (this.aimHold = 0.55),
         (this.lastCombat = this.game.elapsed),
@@ -360,6 +490,12 @@ var du = 1,
       let e = this.burst,
         t = e.a;
       (this.muzzleIndex++, (this.recoil = 1));
+      if (t.kind === `melee` && t.arc) {
+        (this.game.combat.slash(this, e.dirX, e.dirZ, t, e.isSuper),
+          (this.punch[this.muzzleIndex % 2] = 1),
+          this.game.audio.play(e.isSuper ? `shotBig` : `punch`, this.x, this.z));
+        return;
+      }
       let n = this.muzzleWorld(new H()),
         r = Math.atan2(e.dirX, e.dirZ) + (Math.random() - 0.5) * 2 * (t.jitter || 0),
         i = Math.sin(r),
@@ -381,14 +517,49 @@ var du = 1,
             : (this.game.effects.muzzle(n.x, n.y, n.z, i, a, this.bulletColor(e.isSuper), e.isSuper ? 1.1 : 0.75),
               this.game.audio.play(e.isSuper ? `shotBig` : `shot`, this.x, this.z)));
     }
+    onAttackHit(target, projectile, damage) {
+      if (damage <= 0) return;
+      if (this.def.id === `dusty` && projectile.a.kind === `spread`) {
+        let key = projectile.attackId + `:` + target.id,
+          count = (this.scatterHits.get(key) || 0) + 1;
+        this.scatterHits.set(key, count);
+        if (count === 3 && this.ammo < 3) this.reloadT = Math.min(1, this.reloadT + 0.25 / this.def.reload);
+        if (this.scatterHits.size > 48) this.scatterHits.clear();
+      }
+      if (this.def.id === `volt` && projectile.a.electric) {
+        let previousChain = this.voltChain;
+        this.voltChain = this.lastVoltTarget === target && this.game.elapsed - this.lastVoltHit <= 1.5
+          ? Math.min(4, this.voltChain + 1)
+          : 1;
+        this.lastVoltTarget = target;
+        this.lastVoltHit = this.game.elapsed;
+        if (this.voltChain > previousChain) this.addCharge(70);
+      }
+      if (this.def.id === `naka` && projectile.returning) this.speedBoostT = 1.2;
+      if (this.def.id === `ello` && projectile.melee && projectile.travel >= projectile.range * 0.5) this.addCharge(90);
+    }
     addCharge(e) {
       if (!this.alive) return;
       let t = this.superReady;
       ((this.superCharge = Math.min(1, this.superCharge + e / this.def.superCharge)),
         !t && this.superReady && this.isPlayer && this.game.audio.play(`ready`));
     }
-    takeDamage(e, t, n = !1) {
+    takeDamage(e, t, n = !1, context = null) {
       if (!this.alive || this.airborne || this.spawnT > 0) return 0;
+      if (this.def.id === `ello` && this.parryT > 0 && t && context?.kind === `projectile`) {
+        let faceX = Math.sin(this.facing),
+          faceZ = Math.cos(this.facing),
+          incoming = context.dirX * faceX + context.dirZ * faceZ;
+        if (incoming < -0.25) {
+          this.parryT = 0;
+          context.parried = !0;
+          this.addCharge(140);
+          t.takeDamage(Math.min(this.def.super.counterDamage, Math.round(e * 0.9)), this, !0);
+          this.game.effects.impact(this.x + faceX * 0.7, 0.72, this.z + faceZ * 0.7, this.superColor, 12);
+          this.game.audio.play(`zap`, this.x, this.z);
+          return 0;
+        }
+      }
       (t && !t.isPlayer && (e *= this.isPlayer ? this.game.difficulty.damage : 0.34),
         t && ((this.lastAttacker = t), (this.lastHitTime = this.game.elapsed)),
         (e = Math.round(e)));
@@ -400,7 +571,7 @@ var du = 1,
         (this.flash = 1),
         (this.squash = 1),
         (this.revealT = Math.max(this.revealT, 0.9)),
-        this.def.id === `titan` && this.addCharge(e * 0.35),
+        this.def.id === `titan` && t && t !== this && this.addCharge(e * 0.35),
         (!this.hidden || this.isPlayer) &&
           this.game.hud.floatText(this.x, 1.7, this.z, `${e}`, this.isPlayer ? `dmg-self` : `dmg`),
         t && t !== this && (t.addCharge(r), (t.lastCombat = this.game.elapsed)),
@@ -435,6 +606,12 @@ var du = 1,
         (this.deadT = 0),
         (this.burst = null),
         (this.leap = null),
+        (this.dash = null),
+        (this.parryT = 0),
+        (this.slowT = 0),
+        (this.speedBoostT = 0),
+        (this.isCharging = !1),
+        (this.chargeLevel = 0),
         e && e !== this && e.kills++,
         this.game.onBrawlerDown(this, e));
     }
@@ -453,6 +630,15 @@ var du = 1,
       }
       if (
         ((this.spawnT = Math.max(0, this.spawnT - e)),
+        (this.parryT = Math.max(0, this.parryT - e)),
+        (this.slowT = Math.max(0, this.slowT - e)),
+        (this.speedBoostT = Math.max(0, this.speedBoostT - e)),
+        this.game.state === `playing` &&
+        Math.hypot(this.moveX, this.moveZ) < 0.08 &&
+        this.vel.lengthSq() < 0.08 &&
+        this.knock.lengthSq() < 0.04
+          ? (this.stationaryT = Math.min(1, this.stationaryT + e))
+          : (this.stationaryT = 0),
         (this.fireCooldown = Math.max(0, this.fireCooldown - e)),
         (this.aimHold = Math.max(0, this.aimHold - e)),
         (this.revealT = Math.max(0, this.revealT - e)),
@@ -472,7 +658,22 @@ var du = 1,
         (t.left <= 0 && (this.burst = null), (this.aimHold = Math.max(this.aimHold, 0.35)));
       }
       let r = this.root.position;
-      if (this.leap) {
+      if (this.dash) {
+        let dash = this.dash;
+        dash.t += e;
+        let amount = $c(dash.t / dash.duration, 0, 1);
+        amount = amount * amount * (3 - 2 * amount);
+        ((r.x = el(dash.sx, dash.tx, amount)),
+          (r.z = el(dash.sz, dash.tz, amount)),
+          this.vel.set(dash.dx * 5, dash.dz * 5),
+          t.world.resolveCircle(r, Ic));
+        if (dash.t >= dash.duration) {
+          this.dash = null;
+          this.vel.set(0, 0);
+          this.squash = 1.1;
+          t.combat.slash(this, dash.dx, dash.dz, { ...dash.attack, range: 1.35 }, !0);
+        }
+      } else if (this.leap) {
         let i = this.leap;
         i.t += e;
         let gravity = i.gravity || 1,
@@ -496,11 +697,17 @@ var du = 1,
           gameplay = world.biomeGameplay,
           surface = world.surfaceAt(r.x, r.z),
           n = this.def.speed * (gameplay?.moveMultiplier ?? 1);
-        (this.burst && this.burst.a.kind !== `melee` && (n *= 0.82),
+        (this.def.terrainAffinity?.type === `bush` &&
+          world.isBushAt(r.x, r.z) &&
+          (n *= this.def.terrainAffinity.moveMultiplier),
+          this.speedBoostT > 0 && (n *= 1.12),
+          this.slowT > 0 && (n *= 0.85),
+          this.burst && this.burst.a.kind !== `melee` && (n *= 0.82),
           t.state === `countdown` && (n = 0),
           surface === BIOME_SURFACE.MUD && (n *= gameplay?.mudMoveMultiplier ?? 1));
         if (surface === BIOME_SURFACE.ICE) {
-          let traction = gameplay?.iceFriction ?? gameplay?.friction ?? 1,
+          let traction = (gameplay?.iceFriction ?? gameplay?.friction ?? 1) *
+              (this.def.terrainAffinity?.type === `ice` ? this.def.terrainAffinity.tractionMultiplier : 1),
             blend = 1 - Math.exp(-18 * Math.max(0.05, traction) * e);
           ((this.vel.x += (this.moveX * n - this.vel.x) * blend), (this.vel.y += (this.moveZ * n - this.vel.y) * blend));
         } else this.vel.set(this.moveX * n, this.moveZ * n);
@@ -511,18 +718,18 @@ var du = 1,
         (this.knock.multiplyScalar(o), t.world.resolveCircle(r, Ic));
       }
       let hazardDamage = t.world.hazardDamageAt(r.x, r.z);
-      if (hazardDamage > 0) {
+      if (!this.airborne && hazardDamage > 0) {
         if (((this.hazardTime += e), this.hazardTime >= 0.2)) {
           let elapsed = this.hazardTime;
           ((this.hazardTime %= 0.2), this.takeDamage(Math.max(1, Math.round(hazardDamage * elapsed)), null, !0));
           if (!this.alive) return;
         }
       } else this.hazardTime = 0;
-      let i = this.vel.lengthSq() > 0.2 && !this.leap,
+      let i = this.vel.lengthSq() > 0.2 && !this.leap && !this.dash,
         a = this.aimHold > 0 ? this.aimAngle : i ? Math.atan2(this.vel.x, this.vel.y) : this.facing;
       ((this.facing = il(this.facing, a, this.aimHold > 0 ? 26 : 13, e)), (this.root.rotation.y = this.facing));
       let o = this.inBush;
-      ((this.inBush = !this.leap && t.world.isBushAt(r.x, r.z)),
+      ((this.inBush = !this.leap && !this.dash && t.world.isBushAt(r.x, r.z)),
         this.inBush !== o && (!this.hidden || this.isPlayer) && t.effects.leaves(r.x, r.z, 5),
         t.elapsed - this.lastCombat > 3 &&
           this.hp < this.maxHp &&
@@ -549,7 +756,7 @@ var du = 1,
         this.leap || (n.body.rotation.x = (t ? 0.13 : 0) - this.recoil * 0.2),
         (n.head.rotation.z = t ? Math.sin(this.walkPhase) * 0.05 : 0),
         (n.weapon.position.z =
-          (n.weapon.userData.baseZ ?? (n.weapon.userData.baseZ = n.weapon.position.z)) - this.recoil * 0.17));
+          (n.weapon.userData.baseZ ?? (n.weapon.userData.baseZ = n.weapon.position.z)) - this.recoil * 0.17 - this.chargeLevel * 0.08));
       if (n.electricCore) {
         let t = 1 + Math.sin(r * 13) * 0.08 + this.recoil * 0.32;
         (n.electricCore.scale.setScalar(t), (n.electricCore.rotation.z += e * (5 + this.recoil * 12)));
@@ -563,9 +770,11 @@ var du = 1,
         }
       else
         n.pose.swingLeft &&
-          ((n.arms[0].rotation.x = c[0][0] + (t ? -a * 0.7 : 0)), (n.arms[1].rotation.x = c[1][0] - this.recoil * 1.1));
+          ((n.arms[0].rotation.x = c[0][0] + (t ? -a * 0.7 : 0)),
+          (n.arms[1].rotation.x = c[1][0] - this.recoil * 1.1 - this.chargeLevel * 0.22));
       let l = this.flash;
-      for (let e of n.flashMats) e.emissive.setRGB(l, l * 0.92, l * 0.85);
+      for (let e of n.flashMats)
+        e.emissive.setRGB(l + this.chargeLevel * 0.3, l * 0.92 + this.chargeLevel * 0.2, l * 0.85 + this.chargeLevel * 0.08);
       let u = this.root.position.y;
       ((this.ring.position.y = 0.04 - u),
         (this.superRing.position.y = 0.045 - u),

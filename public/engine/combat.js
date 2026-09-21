@@ -173,7 +173,72 @@ var Su = class {
         alive: !0,
         trail: 0,
         melee: a.kind === `melee`,
+        attackId: e.attackSerial,
+        phaseTravel: 0,
+        returning: !1,
+        hitTargets: new Set(),
       });
+    }
+    beginReturn(projectile) {
+      if (!projectile.a.returning || projectile.returning) return !1;
+      ((projectile.returning = !0),
+        (projectile.phaseTravel = 0),
+        projectile.hitTargets.clear());
+      return !0;
+    }
+    incomingBullet(target, horizon = 0.55) {
+      let threat = null,
+        nearestTime = horizon + 1;
+      for (let bullet of this.bullets) {
+        if (!bullet.alive || bullet.owner === target || bullet.hitTargets.has(target)) continue;
+        let x = target.x - bullet.x,
+          z = target.z - bullet.z,
+          along = x * bullet.dx + z * bullet.dz,
+          across = Math.abs(x * bullet.dz - z * bullet.dx),
+          time = along / Math.max(1, bullet.speed);
+        if (along < 0 || time > horizon || across > 0.48 + bullet.radius || time >= nearestTime) continue;
+        ((nearestTime = time), (threat = bullet));
+      }
+      return threat;
+    }
+    slash(owner, dx, dz, attack, isSuper = !1) {
+      let length = Math.hypot(dx, dz) || 1;
+      ((dx /= length), (dz /= length));
+      let reach = attack.range,
+        halfArc = attack.arc * 0.5,
+        minDot = Math.cos(halfArc);
+      for (let target of this.game.brawlers) {
+        if (!target.alive || target === owner || target.airborne) continue;
+        let x = target.x - owner.x,
+          z = target.z - owner.z,
+          distance = Math.hypot(x, z);
+        if (distance > reach + 0.35 || distance < 0.02 || (x * dx + z * dz) / distance < minDot) continue;
+        if (!this.game.world.hasLineOfSight(owner.x, owner.z, target.x, target.z)) continue;
+        let damage = Math.round(attack.damage * owner.damageMul),
+          dealt = target.takeDamage(damage, owner, !1, { kind: `melee`, dirX: dx, dirZ: dz });
+        owner.onAttackHit(target, {
+          a: attack,
+          attackId: owner.attackSerial,
+          travel: distance,
+          range: reach,
+          melee: !0,
+          returning: !1,
+        }, dealt);
+        attack.knockback && target.knock.set((x / distance) * attack.knockback, (z / distance) * attack.knockback);
+      }
+      for (let box of this.boxes) {
+        if (!box.alive) continue;
+        let x = box.x - owner.x,
+          z = box.z - owner.z,
+          distance = Math.hypot(x, z);
+        if (distance <= reach + 0.4 && distance > 0.02 && (x * dx + z * dz) / distance >= minDot)
+          this.damageBox(box, attack.damage * owner.damageMul, owner);
+      }
+      let color = owner.bulletColor(isSuper),
+        x = owner.x + dx * Math.min(reach * 0.72, 1.8),
+        z = owner.z + dz * Math.min(reach * 0.72, 1.8);
+      this.game.effects.impact(x, 0.68, z, color, 14);
+      this.game.effects.muzzle(owner.x + dx * 0.45, 0.75, owner.z + dz * 0.45, dx, dz, color, 0.8);
     }
     spawnBomb(e, t, n, r, i, a, o, s) {
       let c = this.bombPool.find((e) => !e.busy);
@@ -223,11 +288,14 @@ var Su = class {
       for (let i of o.brawlers) {
         if (!i.alive || i === r || i.airborne) continue;
         let a = Math.hypot(i.x - e, i.z - t);
-        if (!(a > c + 0.24) && (i.takeDamage(l, r), n.knockback)) {
-          let r = n.knockback * (1 - (a / (c + 0.5)) * 0.5),
+        if (!(a > c + 0.24)) {
+          let dealt = i.takeDamage(l, r, !1, { kind: `explosion`, x: e, z: t });
+          r.def.id === `fuse` && dealt > 0 && (i.slowT = Math.max(i.slowT, 1));
+          if (!n.knockback) continue;
+          let knockbackPower = n.knockback * (1 - (a / (c + 0.5)) * 0.5),
             o = a > 0.01 ? (i.x - e) / a : 1,
             s = a > 0.01 ? (i.z - t) / a : 0;
-          i.knock.set(o * r, s * r);
+          i.knock.set(o * knockbackPower, s * knockbackPower);
         }
       }
       for (let n of this.boxes) n.alive && Math.hypot(n.x - e, n.z - t) < c + 0.4 && this.damageBox(n, l, r);
@@ -258,8 +326,27 @@ var Su = class {
       for (let s of this.bullets) {
         let c = s.speed * e;
         for (; c > 0 && s.alive;) {
+          if (s.a.returning && !s.returning && s.phaseTravel >= s.range) this.beginReturn(s);
+          if (s.returning) {
+            if (!s.owner.alive) {
+              s.alive = !1;
+              break;
+            }
+            let dx = s.owner.x - s.x,
+              dz = s.owner.z - s.z,
+              distance = Math.hypot(dx, dz);
+            if (distance < 0.22) {
+              s.alive = !1;
+              break;
+            }
+            ((s.dx = dx / distance), (s.dz = dz / distance));
+          }
           let e = Math.min(c, 0.2);
-          ((c -= e), (s.x += s.dx * e), (s.z += s.dz * e), (s.travel += e));
+          ((c -= e),
+            (s.x += s.dx * e),
+            (s.z += s.dz * e),
+            (s.travel += e),
+            (s.phaseTravel += e));
           let r = n.toTile(s.x),
             o = n.toTile(s.z);
           if (n.blocksShots(r, o)) {
@@ -272,35 +359,56 @@ var Su = class {
                   : (s.alive = !1),
               !s.alive)
             ) {
+              if (this.beginReturn(s)) {
+                s.alive = !0;
+                break;
+              }
               s.a.electric
                 ? i.electricImpact(s.x - s.dx * 0.12, yu, s.z - s.dz * 0.12, s.color, s.isSuper)
                 : i.impact(s.x - s.dx * 0.12, yu, s.z - s.dz * 0.12, s.color, s.melee ? 3 : 6);
               break;
             }
           } else s.a.breaksWalls && n.tiles[o * 44 + r] === Z.BUSH && this.breakTile(r, o);
-          for (let e of t.brawlers) {
-            if (!e.alive || e === s.owner || e.airborne) continue;
-            let t = e.x - s.x,
-              n = e.z - s.z,
-              r = a + s.radius;
-            if (!(t * t + n * n > r * r)) {
-              (e.takeDamage(s.damage, s.owner),
+          for (let target of t.brawlers) {
+            if (!target.alive || target === s.owner || target.airborne || s.hitTargets.has(target)) continue;
+            let dx = target.x - s.x,
+              dz = target.z - s.z,
+              radius = a + s.radius;
+            if (!(dx * dx + dz * dz > radius * radius)) {
+              s.hitTargets.add(target);
+              let context = {
+                kind: `projectile`,
+                dirX: s.dx,
+                dirZ: s.dz,
+              },
+                dealt = target.takeDamage(s.damage, s.owner, !1, context);
+              (s.owner.onAttackHit(target, s, dealt),
                 s.a.knockback
-                  ? e.knock.set(s.dx * s.a.knockback, s.dz * s.a.knockback)
-                  : e.knock.set(e.knock.x + s.dx * 1.2, e.knock.y + s.dz * 1.2),
+                  ? target.knock.set(s.dx * s.a.knockback, s.dz * s.a.knockback)
+                  : target.knock.set(target.knock.x + s.dx * 1.2, target.knock.y + s.dz * 1.2),
                 s.a.electric ? i.electricImpact(s.x, yu, s.z, s.color, s.isSuper) : i.impact(s.x, yu, s.z, s.color, 8),
-                i.flash(s.x, yu, s.z, s.color, 5, 4, 0.12),
-                (s.alive = !1));
+                i.flash(s.x, yu, s.z, s.color, 5, 4, 0.12));
+              (context.parried || !(s.a.pierce || s.a.returning)) && (s.alive = !1);
               break;
             }
           }
+          s.alive && s.a.returning && !s.returning && s.phaseTravel >= s.range && this.beginReturn(s);
           s.alive &&
-            s.travel >= s.range &&
+            s.returning &&
+            Math.hypot(s.owner.x - s.x, s.owner.z - s.z) < 0.22 &&
+            (s.alive = !1);
+          if (s.alive && !s.a.returning && s.travel >= s.range) {
             ((s.alive = !1),
-            s.a.electric ? i.electricImpact(s.x, yu, s.z, s.color, !1) : i.impact(s.x, yu, s.z, s.color, 2));
+              s.a.electric ? i.electricImpact(s.x, yu, s.z, s.color, !1) : i.impact(s.x, yu, s.z, s.color, 2));
+          }
         }
         if (!s.alive) continue;
-        let l = $c((s.range - s.travel) / 0.8, 0.35, 1),
+        let remaining = s.a.returning
+            ? s.returning
+              ? Math.hypot(s.owner.x - s.x, s.owner.z - s.z)
+              : s.range - s.phaseTravel
+            : s.range - s.travel,
+          l = $c(remaining / 0.8, 0.35, 1),
           u = s.melee ? s.radius * 1.2 : s.radius * (s.isSuper ? 3.6 : 3),
           d = s.radius * (s.melee ? 1 : 0.8) * l;
         (_u.set(0, Math.atan2(s.dx, s.dz) + (s.a.electric ? Math.sin(t.elapsed * 45 + s.travel * 7) * 0.08 : 0), 0),

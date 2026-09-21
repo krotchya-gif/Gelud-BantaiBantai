@@ -8,6 +8,7 @@ style.css                          seluruh style game
 src/bootstrap.js                   pilih WebGPU atau WebGL2, lalu mulai engine
 public/engine/
   three-legacy.js                  Three.js r186 dan dukungan render lama
+  character-roster.js              stat, passive, dan definisi Naka/Ello/Syafiah
   render-pipeline.js               renderer, preset kualitas, efek post-process
   world.js                          arena, pencahayaan, objek dunia
   brawlers.js                       model dan konfigurasi brawler
@@ -35,6 +36,8 @@ npm run build
 
 Build menghasilkan `dist/`. Upload isi folder itu ke `public_html` atau deploy `dist` ke Vercel sebagai situs statis. Server Node.js tidak berjalan saat game dimainkan; Node hanya dibutuhkan untuk build lokal/CI.
 
-Menu awal menyediakan pilihan mode, arena, dan brawler. Mode `deathmatch` adalah Free-for-All dengan batas 50 kill atau 5 menit, respawn 3 detik, dan perlindungan 2 detik setelah respawn. Arena `open` memberi lebih banyak ruang terbuka; `stepped` memakai cover berlapis dan jalur yang lebih rapat di arena top-down.
+Menu awal menyediakan pilihan mode, arena, dan brawler. Kartu brawler menampilkan durability, agility, damage, range, dan passive. Tiga karakter baru memakai mekanik berbeda: Naka melempar shuriken yang kembali dan mendapat bonus gerak di semak; Ello menebas dalam busur dan dapat menangkis proyektil dari depan; Syafiah mengisi daya panah dan mendapat jangkauan tambahan di area gravitasi rendah. Desktop menyediakan tombol pause dan kembali ke menu utama di pojok kanan atas.
 
-Parameter debugging yang tersedia antara lain `?q=low|medium|high|ultra`, `?bots=auto|easy|normal|hard|brutal`, `?mode=classic|blitz|deathmatch`, `?map=open|stepped`, `?auto=dusty|ace|fuse|titan|volt`, `?seed=`, `?time=`, `?speed=`, dan `?zoom=`.
+Mode `deathmatch` adalah Free-for-All dengan batas 50 kill atau 5 menit, power-up maksimal level 10, respawn 5 detik, dan perlindungan 2 detik setelah respawn. Arena dengan biome dapat memberi keuntungan lingkungan tertentu sesuai permukaan, misalnya traksi Ello di es, bonus gerak Naka di semak, dan jangkauan Syafiah di gravitasi rendah. Arena `open` memberi lebih banyak ruang terbuka; `stepped` memakai cover berlapis dan jalur yang lebih rapat di arena top-down.
+
+Parameter debugging yang tersedia antara lain `?q=low|medium|high|ultra`, `?bots=auto|easy|normal|hard|brutal`, `?mode=classic|blitz|deathmatch`, `?map=open|stepped`, `?auto=dusty|ace|fuse|titan|volt|naka|ello|syafiah`, `?seed=`, `?time=`, `?speed=`, dan `?zoom=`.

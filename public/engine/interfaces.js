@@ -212,6 +212,14 @@ var  Ru = 9,
         a = 0,
         o = 0,
         s = this.target && this.target.alive ? this.target : null;
+      if (t.def.super.kind === `parry` && t.superReady && this.shootT <= 0 && t.spawnT <= 0) {
+        let bullet = n.combat.incomingBullet(t, t.def.super.duration);
+        if (bullet) {
+          let dx = -bullet.dx,
+            dz = -bullet.dz;
+          t.useSuper(dx, dz, t.x + dx * 2, t.z + dz * 2) && (this.shootT = Q(0.45, 0.7));
+        }
+      }
       if (this.state === `fight` && s) {
         let n = sl(t.x, t.z, s.x, s.z) || 0.001;
         if (!(this.thrower || r.hasLineOfSight(t.x, t.z, s.x, s.z)))
@@ -249,7 +257,7 @@ var  Ru = 9,
       if (((t.moveX = c > 0.01 ? a / c : 0), (t.moveZ = c > 0.01 ? o / c : 0), s && this.reactT <= 0 && !s.airborne)) {
         let e = sl(t.x, t.z, s.x, s.z),
           a = this.thrower ? e < i.range : r.hasLineOfSight(t.x, t.z, s.x, s.z);
-        if (a && t.superReady && this.shootT <= 0) {
+        if (a && t.def.super.kind !== `parry` && t.superReady && this.shootT <= 0) {
           let n = t.def.super,
             r = n.kind === `spread` ? 5 : n.kind === `leap` ? n.range : n.range * 0.9,
             i = n.kind === `leap` ? 2.5 : 0;
@@ -298,6 +306,8 @@ var  Ru = 9,
         (this.ndcX = 0),
         (this.ndcY = 0),
         (this.fire = !1),
+        (this.fireStartedAt = 0),
+        (this.fireReleasedDuration = null),
         (this.superHeld = !1),
         (this.superReleased = !1),
         (this.enabled = !0),
@@ -319,8 +329,7 @@ var  Ru = 9,
           (this.keys.delete(t), n.has(t) && this.superHeld && ((this.superHeld = !1), (this.superReleased = !0)));
         }),
         window.addEventListener(`blur`, () => {
-          (this.keys.clear(), (this.fire = !1), (this.superHeld = !1));
-          for (let e of Object.values(this.sticks)) this.resetStick(e);
+          (this.keys.clear(), this.cancelActions());
         }));
       let r = () => performance.now() - this.lastTouch < 900,
         i = (e) => {
@@ -334,11 +343,15 @@ var  Ru = 9,
           r() ||
             (this.touchMode && this.setTouchMode(!1),
             i(e),
-            e.button === 0 && (this.fire = !0),
+            e.button === 0 && ((this.fire = !0), (this.fireStartedAt = performance.now()), (this.fireReleasedDuration = null)),
             e.button === 2 && (this.superHeld = !0));
         }),
         window.addEventListener(`mouseup`, (e) => {
-          (e.button === 0 && (this.fire = !1),
+          (e.button === 0 &&
+            ((this.fireStartedAt > 0 &&
+              (this.fireReleasedDuration = Math.max(0, performance.now() - this.fireStartedAt) / 1000)),
+            (this.fireStartedAt = 0),
+            (this.fire = !1)),
             e.button === 2 && this.superHeld && ((this.superHeld = !1), (this.superReleased = !0)));
         }),
         e.addEventListener(`contextmenu`, (e) => e.preventDefault()));
@@ -358,6 +371,7 @@ var  Ru = 9,
                     : this.sticks.aim;
           n.id === null &&
             ((n.id = e.pointerId),
+            (n.startedAt = performance.now()),
             (n.ox = e.clientX),
             (n.oy = e.clientY),
             (n.x = n.y = n.mag = 0),
@@ -397,6 +411,7 @@ var  Ru = 9,
               x: t.x,
               y: t.y,
               mag: t.mag,
+              held: Math.max(0, (performance.now() - t.startedAt) / 1000),
               tap: !t.moved,
               cancelled: t.moved && t.mag <= 0.22,
             }),
@@ -432,6 +447,20 @@ var  Ru = 9,
     consumeSuperRelease() {
       let e = this.superReleased;
       return ((this.superReleased = !1), e);
+    }
+    consumeFireRelease() {
+      let e = this.fireReleasedDuration;
+      return ((this.fireReleasedDuration = null), e);
+    }
+    cancelActions() {
+      (this.keys.clear(),
+        (this.fire = !1),
+        (this.fireStartedAt = 0),
+        (this.fireReleasedDuration = null),
+        (this.superHeld = !1),
+        (this.superReleased = !1),
+        (this.shots.length = 0));
+      for (let e of Object.values(this.sticks)) this.resetStick(e);
     }
     takeShots() {
       if (this.shots.length === 0) return this.shots;
@@ -510,8 +539,9 @@ var  Ru = 9,
     }
     buildMenu() {
       let e = $(`cards`),
-        t = { dusty: `💥`, ace: `🎯`, fuse: `💣`, titan: `🥊`, volt: `⚡` },
-        n = (e, t) => `<div class="stat"><span>${e}</span><i><b style="width:${Math.round(t * 100)}%"></b></i></div>`;
+        t = { dusty: `💥`, ace: `🎯`, fuse: `💣`, titan: `🥊`, volt: `⚡`, naka: `✦`, ello: `⚔️`, syafiah: `🏹` },
+        n = (label, value) =>
+          `<div class="stat"><span>${label}</span><i><b style="width:${Math.round((value / 5) * 100)}%"></b></i></div>`;
       let modeDescriptions = {
         classic: `Last brawler standing. Poison gas closes in.`,
         blitz: `A faster survival round with less time to loot.`,
@@ -546,12 +576,11 @@ var  Ru = 9,
           i.setAttribute(`aria-pressed`, String(r.id === this.selected)));
         let a = `#` + r.palette.body.toString(16).padStart(6, `0`),
           o = `#` + r.palette.accent.toString(16).padStart(6, `0`),
-          s = r.attack.range / 9.5,
-          c =
-            r.attack.kind === `spread` ? 0.85 : r.attack.kind === `burst` ? 0.75 : r.attack.kind === `lob` ? 0.7 : 0.8;
-        i.innerHTML = `<div class="swatch" style="background:linear-gradient(135deg, ${a}, ${o})">${t[r.id]}</div>
+          stats = r.stats || { durability: 3, agility: 3, damage: 3, range: 3 };
+        i.innerHTML = `<div class="swatch" style="background:linear-gradient(135deg, ${a}, ${o})">${t[r.id] || `★`}</div>
         <h2>${r.name}</h2><div class="role">${r.role}</div><p>${r.blurb}</p>
-        ${n(`HEALTH`, r.hp / 6200)}${n(`RANGE`, s)}${n(`DAMAGE`, c)}`;
+        ${n(`DURABILITY`, stats.durability)}${n(`AGILITY`, stats.agility)}${n(`DAMAGE`, stats.damage)}${n(`RANGE`, stats.range)}
+        <div class="passive"><b>PASSIVE</b> ${r.passive || `No passive`}</div>`;
         let l = () => {
           (this.game.audio.unlock(), this.game.audio.play(`click`), this.select(r.id));
         };
@@ -669,7 +698,9 @@ var  Ru = 9,
         $(`enter-fullscreen`).addEventListener(`click`, () => e.enterImmersive()),
         $(`fullscreen-btn`).addEventListener(`click`, () => e.enterImmersive()),
         $(`rotate-fullscreen`).addEventListener(`click`, () => e.enterImmersive()),
-        $(`pause-btn`).addEventListener(`click`, () => e.setPaused(!e.paused)));
+        $(`pause-btn`).addEventListener(`click`, () => e.setPaused(!e.paused)),
+        $(`desktop-pause-btn`).addEventListener(`click`, () => e.setPaused(!e.paused)),
+        $(`desktop-menu-btn`).addEventListener(`click`, () => e.toMenu()));
     }
     syncSettings() {
       let e = this.game;
