@@ -1,0 +1,561 @@
+function xu() {
+  let e = (e) => {
+    let t = al(128, 128),
+      n = t.getContext(`2d`);
+    if (e) ((n.fillStyle = `#000`), n.fillRect(0, 0, 128, 128));
+    else {
+      ((n.fillStyle = `#5d4a86`), n.fillRect(0, 0, 128, 128));
+      for (let e = 0; e < 4; e++) ((n.fillStyle = e % 2 ? `#584480` : `#65518f`), n.fillRect(0, e * 32, 128, 30));
+      ((n.strokeStyle = `#33264f`), (n.lineWidth = 16), n.strokeRect(8, 8, 112, 112));
+    }
+    ((n.fillStyle = e ? `#7dffb0` : `#2fe07a`),
+      n.beginPath(),
+      n.moveTo(72, 22),
+      n.lineTo(40, 70),
+      n.lineTo(60, 70),
+      n.lineTo(52, 106),
+      n.lineTo(90, 54),
+      n.lineTo(68, 54),
+      n.closePath(),
+      n.fill(),
+      e && ((n.strokeStyle = `#2aff80`), (n.lineWidth = 3), n.strokeRect(17, 17, 94, 94)));
+    let r = new cr(t);
+    return ((r.colorSpace = k), r);
+  };
+  return { map: e(!1), emissiveMap: e(!0) };
+}
+var Su = class {
+    constructor(e) {
+      ((this.game = e), (this.bullets = []), (this.bombs = []), (this.boxes = []), (this.cubes = []), (this.cubePool = []));
+      let t = new xr(1, 10, 8);
+      ((this.bulletMesh = new Yn(t, new Tn({ color: 16777215 }), bu)),
+        (this.bulletMesh.count = 0),
+        (this.bulletMesh.frustumCulled = !1),
+        (this.bulletMesh.userData.noAO = !0),
+        this.bulletMesh.setColorAt(0, vu.set(1, 1, 1)),
+        e.scene.add(this.bulletMesh),
+        (this.bombPool = []));
+      let n = new xr(0.2, 16, 12),
+        r = new Nr({ color: 1776418, roughness: 0.35, metalness: 0.3 }),
+        i = new xr(0.07, 8, 6);
+      for (let t = 0; t < 14; t++) {
+        let t = new ut(),
+          a = new Ln(n, r);
+        a.castShadow = !0;
+        let o = new Ln(i, new Tn({ color: new J(6, 2.4, 0.5) }));
+        (o.position.set(0, 0.24, 0), (o.userData.noAO = !0), t.add(a, o), (t.visible = !1), e.scene.add(t));
+        let s = new Ln(
+            new br(0.93, 1, 56).rotateX(-Math.PI / 2),
+            new Tn({ color: 16728112, transparent: !0, opacity: 0, depthWrite: !1 }),
+          ),
+          c = new Ln(
+            new mr(0.93, 48).rotateX(-Math.PI / 2),
+            new Tn({ color: 16728112, transparent: !0, opacity: 0, depthWrite: !1 }),
+          );
+        (s.add(c),
+          (s.position.y = 0.05),
+          (s.visible = !1),
+          (s.userData.noAO = !0),
+          (s.renderOrder = 2),
+          e.scene.add(s),
+          this.bombPool.push({ group: t, ring: s, fillDisc: c, spark: o, busy: !1 }));
+      }
+      let a = xu();
+      ((this.boxGeo = new fr(0.92, 0.92, 0.92)),
+        (this.boxTex = a),
+        (this.cubeGeo = new fr(0.34, 0.34, 0.34)),
+        (this.cubeMat = new Nr({
+          color: 1870410,
+          emissive: 3211136,
+          emissiveIntensity: 2.4,
+          roughness: 0.25,
+          metalness: 0.2,
+        })),
+        (this.cubeLight = new J(4259722)),
+        (this.orange = new J(16747066)));
+    }
+    addBox(e, t) {
+      let n = this.game.world,
+        r = new Nr({
+          map: this.boxTex.map,
+          emissiveMap: this.boxTex.emissiveMap,
+          emissive: 16777215,
+          emissiveIntensity: 1.4,
+          roughness: 0.7,
+        }),
+        i = new Ln(this.boxGeo, r);
+      (i.position.set(n.center(e), 0.46, n.center(t)),
+        (i.castShadow = !0),
+        (i.receiveShadow = !0),
+        this.game.scene.add(i),
+        n.setBlocker(e, t, !0));
+      let a = {
+        tx: e,
+        ty: t,
+        x: i.position.x,
+        z: i.position.z,
+        hp: Lc.boxHp,
+        maxHp: Lc.boxHp,
+        mesh: i,
+        mat: r,
+        shake: 0,
+        alive: !0,
+        isBox: !0,
+      };
+      return (this.boxes.push(a), a);
+    }
+    boxAt(e, t) {
+      for (let n of this.boxes) if (n.alive && n.tx === e && n.ty === t) return n;
+      return null;
+    }
+    damageBox(e, t, n) {
+      e.alive &&
+        ((e.hp -= t),
+        (e.shake = 1),
+        this.game.hud.floatText(e.x, 1.2, e.z, `${Math.round(t)}`, `dmg`),
+        n && (n.lastCombat = this.game.elapsed),
+        e.hp <= 0 &&
+          ((e.alive = !1),
+          this.game.scene.remove(e.mesh),
+          e.mat.dispose(),
+          this.game.world.setBlocker(e.tx, e.ty, !1),
+          this.game.effects.debris(e.x, 0.5, e.z, 6968470, 9),
+          this.game.effects.burst(e.x, 0.6, e.z, this.cubeLight, 16, 4.5),
+          this.game.effects.flash(e.x, 0.8, e.z, this.cubeLight, 9, 6, 0.3),
+          this.game.audio.play(`crate`, e.x, e.z),
+          this.spawnCube(e.x, e.z, e.x, e.z)));
+    }
+    spawnCube(e, t, n, r) {
+      let cube = this.cubePool.pop();
+      if (!cube) {
+        let mesh = new Ln(this.cubeGeo, this.cubeMat);
+        ((mesh.castShadow = !0), (cube = { mesh, sx: 0, sz: 0, x: 0, z: 0, t: 0, alive: !1, phase: 0 }));
+      }
+      ((cube.sx = e),
+        (cube.sz = t),
+        (cube.x = n),
+        (cube.z = r),
+        (cube.t = 0),
+        (cube.alive = !0),
+        (cube.phase = Math.random() * 6),
+        (cube.mesh.visible = !0),
+        cube.mesh.position.set(e, 0.5, t),
+        cube.mesh.rotation.set(0.6, this.game.elapsed * 1.8 + cube.phase, 0.6),
+        this.game.scene.add(cube.mesh),
+        this.cubes.push(cube));
+    }
+    dropCubes(e, t, n) {
+      let r = this.game.world;
+      for (let i = 0; i < n; i++) {
+        let a = (i / n) * Math.PI * 2 + Math.random(),
+          o = n === 1 ? 0 : 0.7 + Math.random() * 0.5,
+          s = r.nearestOpen(e + Math.cos(a) * o, t + Math.sin(a) * o);
+        this.spawnCube(e, t, s.x, s.z);
+      }
+    }
+    spawnBullet(e, t, n, r, i, a, o, s) {
+      if (this.bullets.length >= bu) return;
+      let c = e.bulletColor(o).clone();
+      this.bullets.push({
+        owner: e,
+        x: t,
+        z: n,
+        dx: r,
+        dz: i,
+        a,
+        isSuper: o,
+        speed: s,
+        travel: 0,
+        range: a.range,
+        radius: a.radius,
+        damage: a.damage * e.damageMul,
+        color: c,
+        alive: !0,
+        trail: 0,
+        melee: a.kind === `melee`,
+      });
+    }
+    spawnBomb(e, t, n, r, i, a, o, s) {
+      let c = this.bombPool.find((e) => !e.busy);
+      if (!c) return;
+      ((c.busy = !0),
+        (c.group.visible = !0),
+        c.group.position.set(t, n, r),
+        c.group.scale.setScalar(o.big ? 1.75 : 1),
+        (c.ring.visible = !0),
+        c.ring.position.set(i, 0.05, a),
+        c.ring.scale.setScalar(o.blast));
+      let l = s ? 16761402 : 16728112;
+      (c.ring.material.color.set(l),
+        c.fillDisc.material.color.set(l),
+        this.bombs.push({
+          owner: e,
+          slot: c,
+          sx: t,
+          sy: n,
+          sz: r,
+          tx: i,
+          tz: a,
+          a: o,
+          isSuper: s,
+          t: 0,
+          fuse: o.fuse,
+          landed: !1,
+          damage: o.damage * e.damageMul,
+          color: e.bulletColor(s).clone(),
+        }));
+    }
+    breakTile(e, t) {
+      let n = this.game,
+        r = n.world.destroyTile(e, t);
+      r &&
+        (r.type === Z.BUSH
+          ? n.effects.leaves(r.x, r.z, 14)
+          : (n.effects.debris(r.x, 0.6, r.z, [12166540, 11565628, 10116910, 5216842][r.style] ?? 12166540, 10),
+            n.effects.dust(r.x, r.z, 8, 2.2),
+            n.audio.play(`crate`, r.x, r.z)));
+    }
+    explode(e, t, n, r, i, a = !1) {
+      let o = this.game,
+        s = o.world,
+        c = n.blast,
+        l = n.damage * r.damageMul;
+      for (let i of o.brawlers) {
+        if (!i.alive || i === r || i.airborne) continue;
+        let a = Math.hypot(i.x - e, i.z - t);
+        if (!(a > c + 0.24) && (i.takeDamage(l, r), n.knockback)) {
+          let r = n.knockback * (1 - (a / (c + 0.5)) * 0.5),
+            o = a > 0.01 ? (i.x - e) / a : 1,
+            s = a > 0.01 ? (i.z - t) / a : 0;
+          i.knock.set(o * r, s * r);
+        }
+      }
+      for (let n of this.boxes) n.alive && Math.hypot(n.x - e, n.z - t) < c + 0.4 && this.damageBox(n, l, r);
+      if (n.breaksWalls) {
+        let n = Math.ceil(c),
+          r = s.toTile(e),
+          i = s.toTile(t);
+        for (let a = -n; a <= n; a++)
+          for (let o = -n; o <= n; o++) {
+            let n = s.center(r + o),
+              l = s.center(i + a);
+            Math.hypot(n - e, l - t) < c - 0.25 && this.breakTile(r + o, i + a);
+          }
+      }
+      (a
+        ? o.effects.slam(e, t, c, r.superColor)
+        : o.effects.explosion(e, t, c, n.big ? r.superColor : this.orange, !!n.big),
+        o.shake(n.big || a ? 0.55 : 0.24, e, t),
+        o.audio.play(n.big || a ? `boomBig` : `boom`, e, t));
+    }
+    update(e) {
+      let t = this.game,
+        n = t.world,
+        r = t.lighting,
+        i = t.effects,
+        a = Ic + 0.06,
+        o = 0;
+      for (let s of this.bullets) {
+        let c = s.speed * e;
+        for (; c > 0 && s.alive;) {
+          let e = Math.min(c, 0.2);
+          ((c -= e), (s.x += s.dx * e), (s.z += s.dz * e), (s.travel += e));
+          let r = n.toTile(s.x),
+            o = n.toTile(s.z);
+          if (n.blocksShots(r, o)) {
+            let e = this.boxAt(r, o);
+            if (
+              (e
+                ? (this.damageBox(e, s.damage, s.owner), (s.alive = !1))
+                : s.a.breaksWalls && n.isBreakable(r, o)
+                  ? (this.breakTile(r, o), s.a.pierce || (s.alive = !1))
+                  : (s.alive = !1),
+              !s.alive)
+            ) {
+              s.a.electric
+                ? i.electricImpact(s.x - s.dx * 0.12, yu, s.z - s.dz * 0.12, s.color, s.isSuper)
+                : i.impact(s.x - s.dx * 0.12, yu, s.z - s.dz * 0.12, s.color, s.melee ? 3 : 6);
+              break;
+            }
+          } else s.a.breaksWalls && n.tiles[o * 44 + r] === Z.BUSH && this.breakTile(r, o);
+          for (let e of t.brawlers) {
+            if (!e.alive || e === s.owner || e.airborne) continue;
+            let t = e.x - s.x,
+              n = e.z - s.z,
+              r = a + s.radius;
+            if (!(t * t + n * n > r * r)) {
+              (e.takeDamage(s.damage, s.owner),
+                s.a.knockback
+                  ? e.knock.set(s.dx * s.a.knockback, s.dz * s.a.knockback)
+                  : e.knock.set(e.knock.x + s.dx * 1.2, e.knock.y + s.dz * 1.2),
+                s.a.electric ? i.electricImpact(s.x, yu, s.z, s.color, s.isSuper) : i.impact(s.x, yu, s.z, s.color, 8),
+                i.flash(s.x, yu, s.z, s.color, 5, 4, 0.12),
+                (s.alive = !1));
+              break;
+            }
+          }
+          s.alive &&
+            s.travel >= s.range &&
+            ((s.alive = !1),
+            s.a.electric ? i.electricImpact(s.x, yu, s.z, s.color, !1) : i.impact(s.x, yu, s.z, s.color, 2));
+        }
+        if (!s.alive) continue;
+        let l = $c((s.range - s.travel) / 0.8, 0.35, 1),
+          u = s.melee ? s.radius * 1.2 : s.radius * (s.isSuper ? 3.6 : 3),
+          d = s.radius * (s.melee ? 1 : 0.8) * l;
+        (_u.set(0, Math.atan2(s.dx, s.dz) + (s.a.electric ? Math.sin(t.elapsed * 45 + s.travel * 7) * 0.08 : 0), 0),
+          mu.setFromEuler(_u),
+          pu.compose(hu.set(s.x, yu, s.z), mu, gu.set(d, d * (s.melee ? 0.7 : 1), u)),
+          this.bulletMesh.setMatrixAt(o, pu));
+        let f = s.isSuper ? 3.6 : 2.8;
+        (this.bulletMesh.setColorAt(o, vu.copy(s.color).multiplyScalar(f * (s.melee ? 0.6 : 1))), o++);
+        let p = s.a.kind === `spread` ? 1.6 / s.a.pellets : s.melee ? 0.5 : 1;
+        (r.addLight(s.x, yu, s.z, s.color, (s.isSuper ? 2.6 : 1.9) * p, 4.2),
+          (s.trail -= e),
+          s.trail <= 0 &&
+            ((s.trail = s.a.electric ? 0.045 : 0.03),
+            s.a.electric
+              ? i.electricTrail(s.x, yu, s.z, s.color, s.radius * (s.isSuper ? 2.5 : 2))
+              : i.trail(s.x, yu, s.z, s.color, s.radius * (s.melee ? 2.2 : 1.6))));
+      }
+      let liveBullets = 0;
+      for (let e = 0; e < this.bullets.length; e++)
+        this.bullets[e].alive && (this.bullets[liveBullets++] = this.bullets[e]);
+      ((this.bullets.length = liveBullets),
+        (this.bulletMesh.count = o),
+        (this.bulletMesh.instanceMatrix.needsUpdate = !0),
+        this.bulletMesh.instanceColor && (this.bulletMesh.instanceColor.needsUpdate = !0));
+      for (let n of this.bombs) {
+        let a = n.slot,
+          o = n.a;
+        if (n.landed) ((n.fuse -= e), (a.group.position.y = 0.2 * a.group.scale.x));
+        else {
+          n.t += e;
+          let t = $c(n.t / o.flight, 0, 1),
+            r = o.big ? 4.4 : 3.3,
+            s = el(n.sy, 0.2, t) + Math.sin(t * Math.PI) * r;
+          (a.group.position.set(el(n.sx, n.tx, t), s, el(n.sz, n.tz, t)),
+            (a.group.rotation.x += e * 9),
+            (a.group.rotation.z += e * 5),
+            t >= 1 && ((n.landed = !0), i.dust(n.tx, n.tz, 4, 1.4)));
+        }
+        let s = n.landed ? 1 - $c(n.fuse / o.fuse, 0, 1) : 0,
+          c = 0.5 + 0.5 * Math.sin(t.elapsed * (14 + s * 30));
+        (a.spark.scale.setScalar(0.8 + c * 0.9),
+          (a.ring.material.opacity = 0.55 + c * 0.35),
+          (a.fillDisc.material.opacity = 0.1 + s * 0.22));
+        let l = a.group.position;
+        (r.addLight(l.x, l.y + 0.3, l.z, this.orange, 2.2 + c * 2.5, 4),
+          Math.random() < e * 40 && i.spark(l.x, l.y + 0.25 * a.group.scale.x, l.z, this.orange),
+          n.landed &&
+            n.fuse <= 0 &&
+            ((n.done = !0),
+            (a.busy = !1),
+            (a.group.visible = !1),
+            (a.ring.visible = !1),
+            this.explode(n.tx, n.tz, o, n.owner, n.isSuper)));
+      }
+      let liveBombs = 0;
+      for (let e = 0; e < this.bombs.length; e++)
+        !this.bombs[e].done && (this.bombs[liveBombs++] = this.bombs[e]);
+      this.bombs.length = liveBombs;
+      for (let n of this.boxes) {
+        if (!n.alive) continue;
+        n.shake = Math.max(0, n.shake - e * 5);
+        let i = n.shake;
+        ((n.mesh.rotation.z = Math.sin(t.elapsed * 60) * 0.09 * i),
+          n.mesh.scale.setScalar(1 + i * 0.08),
+          (n.mat.emissiveIntensity = 1.1 + r.night * 1.6 + i * 3));
+      }
+      for (let n of this.cubes) {
+        n.t += e;
+        let a = $c(n.t / 0.45, 0, 1),
+          o = el(n.sx, n.x, a),
+          s = el(n.sz, n.z, a),
+          c = 0.42 + Math.sin(a * Math.PI) * 1.1 + (a >= 1 ? Math.sin(t.elapsed * 3 + n.phase) * 0.08 : 0);
+        if (
+          (n.mesh.position.set(o, c, s),
+          n.mesh.rotation.set(0.6, t.elapsed * 1.8 + n.phase, 0.6),
+          r.addLight(o, c + 0.1, s, this.cubeLight, 1.6 + r.night * 1.6, 3.4),
+          !(a < 1))
+        ) {
+          for (let e of t.brawlers)
+            if (e.alive && !e.airborne && Math.hypot(e.x - n.x, e.z - n.z) < 0.78) {
+              ((n.alive = !1),
+                e.addCube(),
+                t.scene.remove(n.mesh),
+                (n.mesh.visible = !1),
+                this.cubePool.push(n),
+                i.burst(n.x, 0.7, n.z, this.cubeLight, 12, 3.5),
+                i.flash(n.x, 0.8, n.z, this.cubeLight, 7, 5, 0.25),
+                (!e.hidden || e.isPlayer) && t.hud.floatText(e.x, 2, e.z, `POWER UP!`, `power`),
+                t.audio.play(`pickup`, n.x, n.z));
+              break;
+            }
+        }
+      }
+      let liveCubes = 0;
+      for (let e = 0; e < this.cubes.length; e++)
+        this.cubes[e].alive && (this.cubes[liveCubes++] = this.cubes[e]);
+      this.cubes.length = liveCubes;
+    }
+    clear() {
+      let e = this.game.scene;
+      ((this.bullets.length = 0), (this.bulletMesh.count = 0));
+      for (let e of this.bombs) ((e.slot.busy = !1), (e.slot.group.visible = !1), (e.slot.ring.visible = !1));
+      this.bombs.length = 0;
+      for (let t of this.boxes) (t.alive && e.remove(t.mesh), t.mat.dispose());
+      this.boxes.length = 0;
+      for (let t of this.cubes) (e.remove(t.mesh), (t.mesh.visible = !1), (t.alive = !1), this.cubePool.push(t));
+      this.cubes.length = 0;
+    }
+  },
+  Cu = new Re(),
+  wu = new _e(),
+  Tu = new H(),
+  Eu = new H(),
+  Du = new Ke(),
+  Ou = new J(),
+  ku = `
+  attribute vec4 aColor;
+  attribute float aSize;
+  uniform float uScale;
+  varying vec4 vColor;
+  void main() {
+    vColor = aColor;
+    vec4 mv = modelViewMatrix * vec4( position, 1.0 );
+    gl_Position = projectionMatrix * mv;
+    gl_PointSize = aSize * uScale / max( 0.1, - mv.z );
+  }`,
+  Au = `
+  uniform float uDim;
+  varying vec4 vColor;
+  void main() {
+    float d = length( gl_PointCoord - 0.5 );
+    float a = smoothstep( 0.5, 0.12, d ) * vColor.a;
+    if ( a < 0.004 ) discard;
+    gl_FragColor = vec4( vColor.rgb * uDim, a );
+  }`,
+  ju = class {
+    constructor(e, t, n) {
+      ((this.cap = t), (this.maxActive = t), (this.cursor = 0), (this.additive = n), (this.webgpu = window.__GBH_RENDERER__?.kind === `webgpu`));
+      let r = t;
+      ((this.pos = new Float32Array(r * 3)),
+        (this.drawPos = this.webgpu ? new Float32Array(r * 3) : null),
+        (this.col = new Float32Array(r * 4)),
+        (this.gpuCol = this.webgpu ? new Float32Array(r * 3) : null),
+        (this.size = new Float32Array(r)),
+        (this.vel = new Float32Array(r * 3)),
+        (this.life = new Float32Array(r)),
+        (this.maxLife = new Float32Array(r)),
+        (this.size0 = new Float32Array(r)),
+        (this.size1 = new Float32Array(r)),
+        (this.alpha = new Float32Array(r)),
+        (this.drag = new Float32Array(r)),
+        (this.grav = new Float32Array(r)),
+        (this.activeSlots = []),
+        (this.activeFlags = new Uint8Array(r)));
+      let i = new pn();
+      (i.setAttribute(`position`, new Zt(this.webgpu ? this.drawPos : this.pos, 3).setUsage(N)),
+        this.webgpu
+          ? i.setAttribute(`color`, new Zt(this.gpuCol, 3).setUsage(N))
+          : (i.setAttribute(`aColor`, new Zt(this.col, 4).setUsage(N)), i.setAttribute(`aSize`, new Zt(this.size, 1).setUsage(N))),
+        this.webgpu && i.setDrawRange(0, 0),
+        (this.material = this.webgpu
+          ? new er({ color: 16777215, size: 0.16, vertexColors: !0, transparent: !0, depthWrite: !1, blending: n ? 2 : 1 })
+          : new jr({
+          uniforms: { uScale: { value: 600 }, uDim: { value: 1 } },
+          vertexShader: ku,
+          fragmentShader: Au,
+          transparent: !0,
+          depthWrite: !1,
+          blending: n ? 2 : 1,
+        })),
+        (this.points = new ar(i, this.material)),
+        (this.points.frustumCulled = !1),
+        (this.points.renderOrder = n ? 8 : 7),
+        e.add(this.points));
+    }
+    setQuality(e) {
+      this.maxActive = Math.max(1, Math.floor(this.cap * e));
+    }
+    emit(e, t, n, r, i, a, o, s, c, l, u, d, f = 1, p = 1.5, m = 0) {
+      if (this.activeSlots.length >= this.maxActive) return;
+      let h = this.cursor;
+      ((this.cursor = (h + 1) % this.cap),
+        !this.activeFlags[h] && (this.activeFlags[h] = 1, this.activeSlots.push(h)),
+        (this.pos[h * 3] = e),
+        (this.pos[h * 3 + 1] = t),
+        (this.pos[h * 3 + 2] = n),
+        (this.vel[h * 3] = r),
+        (this.vel[h * 3 + 1] = i),
+        (this.vel[h * 3 + 2] = a),
+        (this.life[h] = o),
+        (this.maxLife[h] = o),
+        (this.size0[h] = s),
+        (this.size1[h] = c),
+        (this.col[h * 4] = l),
+        (this.col[h * 4 + 1] = u),
+        (this.col[h * 4 + 2] = d),
+        (this.alpha[h] = f),
+        (this.drag[h] = p),
+        (this.grav[h] = m));
+    }
+    update(e) {
+      let {
+        pos: t,
+        vel: n,
+        life: r,
+        maxLife: i,
+        size: a,
+        size0: o,
+        size1: s,
+        col: c,
+        alpha: l,
+        drag: u,
+        grav: d,
+      } = this;
+      let dirty = this.activeSlots.length > 0;
+      for (let activeIndex = 0; activeIndex < this.activeSlots.length;) {
+        let f = this.activeSlots[activeIndex];
+        r[f] -= e;
+        let progress = 1 - Math.max(0, r[f]) / i[f],
+          m = Math.exp(-u[f] * e);
+        ((n[f * 3] *= m),
+          (n[f * 3 + 1] = n[f * 3 + 1] * m - d[f] * e),
+          (n[f * 3 + 2] *= m),
+          (t[f * 3] += n[f * 3] * e),
+          (t[f * 3 + 1] += n[f * 3 + 1] * e),
+          (t[f * 3 + 2] += n[f * 3 + 2] * e),
+          t[f * 3 + 1] < 0.03 && d[f] > 0 && ((t[f * 3 + 1] = 0.03), (n[f * 3 + 1] *= -0.35)),
+          (a[f] = r[f] <= 0 ? 0 : o[f] + (s[f] - o[f]) * progress),
+          (c[f * 4 + 3] = l[f] * (1 - progress * progress)));
+        if (r[f] <= 0) {
+          this.activeFlags[f] = 0;
+          let last = this.activeSlots.pop();
+          if (activeIndex < this.activeSlots.length) this.activeSlots[activeIndex] = last;
+          a[f] = 0;
+        } else activeIndex++;
+      }
+      if (!dirty) return;
+      let f = this.points.geometry;
+      if (this.webgpu) {
+        for (let index = 0; index < this.activeSlots.length; index++) {
+          let slot = this.activeSlots[index],
+            source = slot * 3,
+            target = index * 3,
+            color = slot * 4,
+            alpha = c[color + 3];
+          ((this.drawPos[target] = t[source]),
+            (this.drawPos[target + 1] = t[source + 1]),
+            (this.drawPos[target + 2] = t[source + 2]),
+            (this.gpuCol[target] = c[color] * alpha),
+            (this.gpuCol[target + 1] = c[color + 1] * alpha),
+            (this.gpuCol[target + 2] = c[color + 2] * alpha));
+        }
+        (f.setDrawRange(0, this.activeSlots.length),
+          (f.attributes.position.needsUpdate = !0),
+          (f.attributes.color.needsUpdate = this.activeSlots.length > 0));
+      } else ((f.attributes.position.needsUpdate = !0), (f.attributes.aColor.needsUpdate = !0), (f.attributes.aSize.needsUpdate = !0));
+    }
+  };
