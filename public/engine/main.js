@@ -126,6 +126,7 @@ var ld = class {
         let t = Uu(e);
         (t === `KeyT` && this.cycleTime(),
           t === `KeyM` && this.setMuted(!this.audio.muted),
+          t === `KeyF` && this.useHeldItem() && e.preventDefault(),
           t === `KeyP` && [`countdown`, `playing`].includes(this.state) && this.setPaused(!this.paused),
           t === `Escape` &&
             (this.paused
@@ -133,6 +134,7 @@ var ld = class {
               : ($(`settings`).classList.remove(`open`), $(`gear`).setAttribute(`aria-expanded`, `false`))));
       }),
       this.hud.syncSettings(),
+      $(`item-action`).addEventListener(`click`, () => this.useHeldItem()),
       this.toMenu());
     let s = this.params.get(`auto`);
     (s && Bc[s] && this.startMatch(s),
@@ -311,6 +313,11 @@ var ld = class {
       }),
       this.hud.showPause(r, n),
       changed && t && this.hud.toast(r ? `Paused - press P or Escape to resume` : `Resumed`));
+    return !0;
+  }
+  useHeldItem() {
+    if (this.paused || this.state !== `playing` || !this.player?.useHeldItem()) return !1;
+    this.vibrate(12);
     return !0;
   }
   toMenu() {

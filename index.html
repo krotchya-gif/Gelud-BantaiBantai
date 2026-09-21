@@ -31,12 +31,17 @@
         <ol id="dm-leaderboard-list"></ol>
       </div>
       <div id="banner" class="outline"></div>
-      <div id="hints"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move &nbsp; <kbd>Mouse</kbd> aim &nbsp; <kbd>Click</kbd> shoot<br /><kbd>Space</kbd> / <kbd>Right-click</kbd> hold to aim super, release to fire<br /><kbd>T</kbd> time of day &nbsp; <kbd>P</kbd> pause &nbsp; <kbd>M</kbd> mute</div>
+      <div id="hints"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move &nbsp; <kbd>Mouse</kbd> aim &nbsp; <kbd>Click</kbd> shoot<br /><kbd>Space</kbd> / <kbd>Right-click</kbd> hold to aim super, release to fire<br /><kbd>F</kbd> use item &nbsp; <kbd>T</kbd> time of day &nbsp; <kbd>P</kbd> pause &nbsp; <kbd>M</kbd> mute</div>
       <div id="sticks">
         <div class="stick" id="stick-move"><i></i><b>MOVE</b></div>
         <div class="stick" id="stick-aim"><i></i><b>DRAG TO AIM &middot; TAP TO AUTO-AIM</b></div>
       </div>
       <div id="super"><div class="core" id="super-core">SUPER</div></div>
+      <button id="item-action" type="button" disabled aria-label="No item held" title="No item held">
+        <span class="item-icon" id="item-icon" aria-hidden="true">◇</span>
+        <span class="item-label" id="item-label">ITEM</span>
+        <span class="item-key" id="item-key">F</span>
+      </button>
     </div>
 
     <div id="desktop-actions" aria-label="Match controls">

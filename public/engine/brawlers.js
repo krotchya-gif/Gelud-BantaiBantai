@@ -317,6 +317,9 @@ var du = 1,
         (this.chargeLevel = 0),
         (this.slowT = 0),
         (this.speedBoostT = 0),
+        (this.itemSpeedT = 0),
+        (this.shieldT = 0),
+        (this.heldItem = null),
         (this.stationaryT = 0),
         (this.attackSerial = 0),
         (this.lastVoltTarget = null),
@@ -538,10 +541,10 @@ var du = 1,
       if (this.def.id === `naka` && projectile.returning) this.speedBoostT = 1.2;
       if (this.def.id === `ello` && projectile.melee && projectile.travel >= projectile.range * 0.5) this.addCharge(90);
     }
-    addCharge(e) {
+    addCharge(e, rate = 0.75) {
       if (!this.alive) return;
       let t = this.superReady;
-      ((this.superCharge = Math.min(1, this.superCharge + e / this.def.superCharge)),
+      ((this.superCharge = Math.min(1, this.superCharge + (e * rate) / this.def.superCharge)),
         !t && this.superReady && this.isPlayer && this.game.audio.play(`ready`));
     }
     takeDamage(e, t, n = !1, context = null) {
@@ -561,6 +564,7 @@ var du = 1,
         }
       }
       (t && !t.isPlayer && (e *= this.isPlayer ? this.game.difficulty.damage : 0.34),
+        this.shieldT > 0 && (e *= 0.35),
         t && ((this.lastAttacker = t), (this.lastHitTime = this.game.elapsed)),
         (e = Math.round(e)));
       let r = Math.min(this.hp, e);
@@ -590,6 +594,65 @@ var du = 1,
         (!this.hidden || this.isPlayer) &&
         (this.game.hud.floatText(this.x, 1.7, this.z, `+${n}`, `heal`), this.game.effects.healPuff(this.x, this.z));
     }
+    canUseHeldItem() {
+      if (!this.alive || !this.heldItem) return !1;
+      switch (this.heldItem) {
+        case `shield`:
+          return this.shieldT <= 0;
+        case `speed`:
+          return this.itemSpeedT <= 0;
+        case `heal`:
+          return this.hp < this.maxHp;
+        case `ammo`:
+          return this.ammo < 3;
+        case `super`:
+          return !this.superReady;
+        default:
+          return !1;
+      }
+    }
+    useHeldItem() {
+      if (!this.canUseHeldItem()) return !1;
+      let item = this.heldItem,
+        names = { shield: `Shield`, speed: `Speed boost`, heal: `Medkit`, ammo: `Ammo refill`, super: `Super charger` };
+      this.heldItem = null;
+      switch (item) {
+        case `shield`:
+          this.shieldT = 3;
+          break;
+        case `speed`:
+          this.itemSpeedT = 4;
+          break;
+        case `heal`:
+          this.heal(this.maxHp * 0.35);
+          break;
+        case `ammo`:
+          ((this.ammo = 3), (this.reloadT = 0));
+          break;
+        case `super`:
+          this.addCharge(this.def.superCharge * 0.25, 1);
+          break;
+      }
+      ((this.squash = -1),
+        this.game.effects.burst(this.x, 0.7, this.z, this.superColor, 10, 3),
+        this.game.audio.play(`pickup`, this.x, this.z),
+        this.isPlayer && this.game.hud.toast(`${names[item]} used`));
+      return !0;
+    }
+    updateBotItem() {
+      if (this.isPlayer || !this.heldItem || !this.canUseHeldItem()) return;
+      let nearest = 1 / 0;
+      for (let other of this.game.brawlers)
+        other !== this && other.alive && (nearest = Math.min(nearest, Math.hypot(other.x - this.x, other.z - this.z)));
+      let health = this.hp / this.maxHp,
+        use =
+          (this.heldItem === `heal` && health <= 0.58) ||
+          (this.heldItem === `shield` && health <= 0.72 && nearest <= 4) ||
+          (this.heldItem === `speed` && nearest > 3.5 && nearest < 12) ||
+          (this.heldItem === `ammo` && this.ammo <= 1) ||
+          (this.heldItem === `super` && !this.superReady && this.superCharge <= 0.75 && nearest < 8);
+      use && this.useHeldItem();
+    }
     addCube() {
       if (this.game.modeName === `deathmatch` && this.cubes >= this.game.mode.powerUpCap) return !1;
       this.cubes++;
@@ -607,10 +670,13 @@ var du = 1,
         (this.burst = null),
         (this.leap = null),
         (this.dash = null),
-        (this.parryT = 0),
-        (this.slowT = 0),
-        (this.speedBoostT = 0),
-        (this.isCharging = !1),
+         (this.parryT = 0),
+         (this.slowT = 0),
+         (this.speedBoostT = 0),
+         (this.itemSpeedT = 0),
+         (this.shieldT = 0),
+         (this.heldItem = null),
+         (this.isCharging = !1),
         (this.chargeLevel = 0),
         e && e !== this && e.kills++,
         this.game.onBrawlerDown(this, e));
@@ -633,6 +699,9 @@ var du = 1,
         (this.parryT = Math.max(0, this.parryT - e)),
         (this.slowT = Math.max(0, this.slowT - e)),
         (this.speedBoostT = Math.max(0, this.speedBoostT - e)),
+        (this.itemSpeedT = Math.max(0, this.itemSpeedT - e)),
+        (this.shieldT = Math.max(0, this.shieldT - e)),
+        this.game.state === `playing` && this.updateBotItem(),
         this.game.state === `playing` &&
         Math.hypot(this.moveX, this.moveZ) < 0.08 &&
         this.vel.lengthSq() < 0.08 &&
@@ -700,6 +769,7 @@ var du = 1,
         (this.def.terrainAffinity?.type === `bush` &&
           world.isBushAt(r.x, r.z) &&
           (n *= this.def.terrainAffinity.moveMultiplier),
+          this.itemSpeedT > 0 && (n *= 1.35),
           this.speedBoostT > 0 && (n *= 1.12),
           this.slowT > 0 && (n *= 0.85),
           this.burst && this.burst.a.kind !== `melee` && (n *= 0.82),

@@ -294,6 +294,15 @@ var ol = (e, t, n, r) => (e - n) * (e - n) + (t - r) * (t - r),
         t.material.dispose(),
         (this.scene.background = new J(724506)));
     }
+    invalidateShadowMap(e) {
+      let t = e.shadow;
+      if (!t.map) return;
+      if (this.pipeline.isWebGPU) {
+        t.needsUpdate = !0;
+        return;
+      }
+      (t.map.dispose(), (t.map = null));
+    }
     applyQuality(e) {
       ((this.tier = e.tier),
         (this.shadowFitDirty = !0),
@@ -301,14 +310,14 @@ var ol = (e, t, n, r) => (e - n) * (e - n) + (t - r) * (t - r),
         this.mapSize !== e.shadowMap &&
           ((this.mapSize = e.shadowMap),
           this.key.shadow.mapSize.set(e.shadowMap, e.shadowMap),
-          this.key.shadow.map && (this.key.shadow.map.dispose(), (this.key.shadow.map = null))),
+          this.invalidateShadowMap(this.key)),
         this.setPoolSize(e.poolLights),
         this.lampSlots.forEach((t, n) => {
           let r = e.lampShadows && n < this.lampShadowSlots;
           (t.castShadow !== r && (t.castShadow = r),
             t.shadow.mapSize.x !== e.lampMap &&
               (t.shadow.mapSize.set(e.lampMap, e.lampMap),
-              t.shadow.map && (t.shadow.map.dispose(), (t.shadow.map = null))));
+              this.invalidateShadowMap(t)));
         }),
         this.updateShadowParams());
     }

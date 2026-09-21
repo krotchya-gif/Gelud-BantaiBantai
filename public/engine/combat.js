@@ -26,7 +26,14 @@ function xu() {
 }
 var Su = class {
     constructor(e) {
-      ((this.game = e), (this.bullets = []), (this.bombs = []), (this.boxes = []), (this.cubes = []), (this.cubePool = []));
+      ((this.game = e),
+        (this.bullets = []),
+        (this.bombs = []),
+        (this.boxes = []),
+        (this.cubes = []),
+        (this.cubePool = []),
+        (this.items = []),
+        (this.itemPool = []));
       let t = new xr(1, 10, 8);
       ((this.bulletMesh = new Yn(t, new Tn({ color: 16777215 }), bu)),
         (this.bulletMesh.count = 0),
@@ -72,6 +79,21 @@ var Su = class {
           metalness: 0.2,
         })),
         (this.cubeLight = new J(4259722)),
+        (this.itemGeo = new fr(0.4, 0.4, 0.4)),
+        (this.itemMaterials = {
+          shield: new Nr({ color: 0x7ceaff, emissive: 0x208db4, emissiveIntensity: 2.6, roughness: 0.28, metalness: 0.16 }),
+          speed: new Nr({ color: 0xffd15c, emissive: 0xb36a10, emissiveIntensity: 2.5, roughness: 0.3, metalness: 0.12 }),
+          heal: new Nr({ color: 0x7dff9a, emissive: 0x168b3b, emissiveIntensity: 2.5, roughness: 0.28, metalness: 0.08 }),
+          ammo: new Nr({ color: 0xff956d, emissive: 0xb53721, emissiveIntensity: 2.4, roughness: 0.3, metalness: 0.12 }),
+          super: new Nr({ color: 0xd0a2ff, emissive: 0x7534c4, emissiveIntensity: 2.8, roughness: 0.24, metalness: 0.22 }),
+        }),
+        (this.itemLights = {
+          shield: new J(0x57dfff),
+          speed: new J(0xffc43c),
+          heal: new J(0x54ff82),
+          ammo: new J(0xff7959),
+          super: new J(0xc887ff),
+        }),
         (this.orange = new J(16747066)));
     }
     addBox(e, t) {
@@ -123,7 +145,7 @@ var Su = class {
           this.game.effects.burst(e.x, 0.6, e.z, this.cubeLight, 16, 4.5),
           this.game.effects.flash(e.x, 0.8, e.z, this.cubeLight, 9, 6, 0.3),
           this.game.audio.play(`crate`, e.x, e.z),
-          this.spawnCube(e.x, e.z, e.x, e.z)));
+          this.spawnItem(e.x, e.z)));
     }
     spawnCube(e, t, n, r) {
       let cube = this.cubePool.pop();
@@ -143,6 +165,36 @@ var Su = class {
         cube.mesh.rotation.set(0.6, this.game.elapsed * 1.8 + cube.phase, 0.6),
         this.game.scene.add(cube.mesh),
         this.cubes.push(cube));
+    }
+    spawnItem(e, t) {
+      let roll = Math.random(),
+        kind = roll < 0.26 ? `heal` : roll < 0.5 ? `shield` : roll < 0.7 ? `speed` : roll < 0.89 ? `ammo` : `super`,
+        angle = Math.random() * Math.PI * 2,
+        landing = this.game.world.nearestOpen(e + Math.cos(angle) * 0.65, t + Math.sin(angle) * 0.65),
+        item = this.itemPool.pop();
+      if (!item) {
+        let mesh = new Ln(this.itemGeo, this.itemMaterials[kind]);
+        ((mesh.castShadow = !1), (mesh.receiveShadow = !1), (mesh.userData.noAO = !0));
+        item = { mesh, kind, sx: 0, sz: 0, x: 0, z: 0, t: 0, life: 0, phase: 0, alive: !1 };
+      }
+      ((item.kind = kind),
+        (item.sx = e),
+        (item.sz = t),
+        (item.x = landing.x),
+        (item.z = landing.z),
+        (item.t = 0),
+        (item.life = 24),
+        (item.phase = Math.random() * 6),
+        (item.alive = !0),
+        (item.mesh.material = this.itemMaterials[kind]),
+        (item.mesh.visible = !0),
+        item.mesh.position.set(e, 0.55, t),
+        item.mesh.rotation.set(0.25, item.phase, 0.25),
+        this.game.scene.add(item.mesh),
+        this.items.push(item));
+    }
+    removeItem(item) {
+      (this.game.scene.remove(item.mesh), (item.mesh.visible = !1), (item.alive = !1), this.itemPool.push(item));
     }
     dropCubes(e, t, n) {
       let r = this.game.world;
@@ -506,6 +558,37 @@ var Su = class {
       for (let e = 0; e < this.cubes.length; e++)
         this.cubes[e].alive && (this.cubes[liveCubes++] = this.cubes[e]);
       this.cubes.length = liveCubes;
+      for (let item of this.items) {
+        item.t += e;
+        item.life -= e;
+        if (item.life <= 0) {
+          this.removeItem(item);
+          continue;
+        }
+        let arc = $c(item.t / 0.42, 0, 1),
+          x = el(item.sx, item.x, arc),
+          z = el(item.sz, item.z, arc),
+          y = 0.46 + Math.sin(arc * Math.PI) * 0.8 + (arc >= 1 ? Math.sin(t.elapsed * 4 + item.phase) * 0.08 : 0);
+        (item.mesh.position.set(x, y, z),
+          item.mesh.rotation.set(0.25, t.elapsed * 1.7 + item.phase, 0.25),
+          item.mesh.scale.setScalar(1 + Math.sin(t.elapsed * 5 + item.phase) * 0.05),
+          r.addLight(x, y + 0.1, z, this.itemLights[item.kind], 1.5 + r.night, 3.2));
+        if (arc < 1) continue;
+        for (let brawler of t.brawlers) {
+          if (!brawler.alive || brawler.airborne || brawler.heldItem || Math.hypot(brawler.x - item.x, brawler.z - item.z) >= 0.82) continue;
+          let kind = item.kind;
+          ((brawler.heldItem = kind),
+            this.removeItem(item),
+            i.burst(item.x, 0.7, item.z, this.itemLights[kind], 10, 3.1),
+            (!brawler.hidden || brawler.isPlayer) && t.hud.floatText(brawler.x, 2, brawler.z, `${kind.toUpperCase()}!`, `power`),
+            brawler.isPlayer && t.hud.toast(`${kind.toUpperCase()} READY · TAP ITEM OR PRESS F`),
+            t.audio.play(`pickup`, item.x, item.z));
+          break;
+        }
+      }
+      let liveItems = 0;
+      for (let e = 0; e < this.items.length; e++) this.items[e].alive && (this.items[liveItems++] = this.items[e]);
+      this.items.length = liveItems;
     }
     clear() {
       let e = this.game.scene;
@@ -516,6 +599,8 @@ var Su = class {
       this.boxes.length = 0;
       for (let t of this.cubes) (e.remove(t.mesh), (t.mesh.visible = !1), (t.alive = !1), this.cubePool.push(t));
       this.cubes.length = 0;
+      for (let item of this.items) this.removeItem(item);
+      this.items.length = 0;
     }
   },
   Cu = new Re(),

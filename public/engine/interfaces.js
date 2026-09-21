@@ -507,6 +507,7 @@ var  Ru = 9,
         (this.lastGasWarning = null),
         (this.lastKillLine = ``),
         (this.lastSuper = -1),
+        (this.lastItemUi = ``),
         (this.statsT = 0),
         (this.frames = 0),
         (this.fps = 0),
@@ -516,7 +517,7 @@ var  Ru = 9,
         this.buildSettings());
     }
     setTouchMode(e) {
-      ((this.touch = e), document.body.classList.toggle(`touch`, e), (this.lastSuper = -1));
+      ((this.touch = e), document.body.classList.toggle(`touch`, e), (this.lastSuper = -1), (this.lastItemUi = ``));
     }
     updateSticks() {
       if (!this.touch) return;
@@ -938,6 +939,7 @@ var  Ru = 9,
       this.updateMatchStatus(e);
       let a = t.player,
         o = a ? Math.round(a.superCharge * 100) : 0;
+      this.syncItemButton(a);
       if (o !== this.lastSuper) {
         this.lastSuper = o;
         let e = $(`super`);
@@ -985,6 +987,29 @@ var  Ru = 9,
             ? `quality: your choice`
             : `quality: auto  (night frame ${t.perf.benchMs ? t.perf.benchMs.toFixed(1) : `?`} ms at startup)`);
       }
+    }
+    syncItemButton(player) {
+      let button = $(`item-action`),
+        item = player?.heldItem || null,
+        canUse = !!item && this.game.state === `playing` && !this.game.paused && player.canUseHeldItem(),
+        signature = `${item || ``}:${+canUse}:${this.touch ? `touch` : `keys`}`;
+      if (signature === this.lastItemUi) return;
+      this.lastItemUi = signature;
+      let meta = {
+        shield: { icon: `🛡️`, label: `SHIELD`, title: `Damage reduced by 65% for 3 seconds` },
+        speed: { icon: `⚡`, label: `SPEED`, title: `Move 35% faster for 4 seconds` },
+        heal: { icon: `✚`, label: `MEDKIT`, title: `Restore 35% of max health` },
+        ammo: { icon: `↻`, label: `AMMO`, title: `Refill all ammo` },
+        super: { icon: `✦`, label: `SUPER`, title: `Charge 25% of your Super meter` },
+      }[item];
+      (($(`item-icon`).textContent = meta?.icon || `◇`),
+        ($(`item-label`).textContent = meta?.label || `ITEM`),
+        ($(`item-key`).textContent = this.touch ? `TAP` : `F`),
+        (button.dataset.item = item || `empty`),
+        button.classList.toggle(`has-item`, !!item),
+        (button.disabled = !canUse),
+        button.setAttribute(`aria-label`, item ? `${meta.label}. ${meta.title}${canUse ? `. Activate now` : `. Not available yet`}` : `No item held`),
+        (button.title = item ? `${meta.title} — ${this.touch ? `tap to use` : `press F to use`}` : `No item held`));
     }
   },
   Xu = class {
