@@ -603,7 +603,7 @@ var ld = class {
     let t = this.input,
       n = t.axis();
     ((e.moveX = n.x), (e.moveZ = n.z));
-    let charging = e.def.id === `syafiah` && this.state === `playing` && (t.touchMode ? t.sticks.aim.id !== null : t.fire && !t.superHeld),
+    let charging = e.def.id === `syafiah` && e.canAct() && e.ammo >= 1 && !e.burst && e.fireCooldown <= 0 && this.state === `playing` && (t.touchMode ? t.sticks.aim.id !== null : t.fire && !t.superHeld),
       chargeStartedAt = t.touchMode ? t.sticks.aim.startedAt : t.fireStartedAt;
     ((e.isCharging = charging),
       (e.chargeLevel = charging

@@ -1,3 +1,5 @@
+import './pwa.js';
+
 const legacyScripts = [
   'engine/three-legacy.js',
   'engine/character-roster.js',

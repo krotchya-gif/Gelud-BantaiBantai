@@ -196,8 +196,25 @@ var  Ru = 9,
       let s = (this.game.difficulty.dodge || 0.4) * (0.45 + this.skill * 0.55);
       return [e * (1 - s) + i * s, t * (1 - s) + a * s];
     }
+    tryBasicAttack(dx, dz, x, z) {
+      const b = this.b;
+      if (b.def.id !== `syafiah`) return b.attack(dx, dz, x, z);
+      if (!b.canAct() || b.ammo < 1 || b.fireCooldown > 0 || b.burst) return !1;
+      this.drawTime = (this.drawTime || 0) + this.drawDt;
+      b.isCharging = !0;
+      b.chargeLevel = Math.min(1, this.drawTime / b.def.attack.chargeTime);
+      b.aimAngle = Math.atan2(dx, dz);
+      b.aimHold = 0.15;
+      if (this.drawTime < 0.75) return !1;
+      const fired = b.attack(dx, dz, x, z, this.drawTime);
+      this.drawTime = 0;
+      return fired;
+    }
     update(e) {
       let { b: t, game: n } = this;
+      this.drawDt = e;
+      t.isCharging = !1;
+      t.chargeLevel = 0;
       if (!t.alive) return;
       if (n.state === `countdown`) {
         t.moveX = t.moveZ = 0;
@@ -268,7 +285,7 @@ var  Ru = 9,
         }
         if (a && e < i.range * 0.95 && this.shootT <= 0 && t.ammo >= 1) {
           let e = this.aimAt(s.x, s.z, s.vel.x, s.vel.y, i);
-          t.attack(e.dx, e.dz, e.x, e.z) &&
+          this.tryBasicAttack(e.dx, e.dz, e.x, e.z) &&
             (this.shootT = (Q(0.45, 1) + (t.ammo < 1 ? 0.4 : 0)) * (s.isPlayer ? n.difficulty.cadence : 1));
         }
       } else if (this.state === `box` && this.box && this.box.alive && this.shootT <= 0 && t.ammo >= 1) {
@@ -276,9 +293,10 @@ var  Ru = 9,
         if (e < i.range * 0.85 && (this.thrower || this.seesBox(this.box))) {
           let n = (this.box.x - t.x) / (e || 1),
             r = (this.box.z - t.z) / (e || 1);
-          t.attack(n, r, this.box.x, this.box.z) && (this.shootT = Q(0.35, 0.7));
+          this.tryBasicAttack(n, r, this.box.x, this.box.z) && (this.shootT = Q(0.35, 0.7));
         }
       }
+      if (!t.isCharging) this.drawTime = 0;
     }
   },
   Hu = {

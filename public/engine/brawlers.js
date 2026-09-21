@@ -1,3 +1,26 @@
+// Shared low-poly weapon silhouettes, also used by the instanced projectile batches.
+function brawlerProjectileGeometry(kind) {
+  return $l(`weapon-${kind}`, () => {
+    let parts = [];
+    if (kind === `shuriken`) {
+      parts.push(nu(0.095, 0.095, 0.035, 8).clone());
+      for (let j = 0; j < 4; j++) {
+        let angle = j * Math.PI / 2;
+        parts.push(nu(0, 0.12, 0.3, 4).clone().rotateX(Math.PI / 2)
+          .scale(1, 0.18, 1).translate(0, 0, 0.19).rotateY(angle));
+      }
+    } else {
+      parts.push(nu(0.018, 0.018, 0.72, 6).clone().rotateX(Math.PI / 2));
+      parts.push(nu(0, 0.075, 0.17, 4).clone().rotateX(Math.PI / 2).translate(0, 0, 0.43));
+      parts.push(ru(0.16, 0.02, 0.17).clone().translate(0, 0, -0.28));
+      parts.push(ru(0.02, 0.16, 0.17).clone().translate(0, 0, -0.28));
+    }
+    let geometry = Nl(parts);
+    parts.forEach(part => part.dispose());
+    geometry.computeBoundingSphere();
+    return geometry;
+  });
+}
 var brawlerMergeGeometryCache = new Map();
 function mergeBrawlerPivot(e, t, n) {
   let r = new Map();
@@ -172,55 +195,73 @@ function uu(e, t) {
         [-1.34, -0.22],
       ]));
   } else if (e.id === "naka") {
-    (s(d, ru(0.34, 0.1, 0.12), r.accent, 0, -0.17, 0.18),
-      s(d, ru(0.27, 0.07, 0.05), r.dark, 0, -0.14, 0.27),
-      s(d, ru(0.22, 0.12, 0.1), r.dark, 0, -0.18, -0.18));
+    // Hood covers the crown and back, leaving a narrow skin/eye opening.
+    s(d, iu(0.323, 0.48), r.body, 0, 0.045, -0.025);
+    s(d, eu(0.29, 12, 8), r.body, 0, -0.08, -0.1, 1.08, 0.85, 0.8);
+    s(d, eu(0.28, 12, 8), r.body, 0, -0.14, 0.06, 1, 0.52, 0.98);
+    s(d, ru(0.52, 0.065, 0.06), r.dark, 0, 0.115, 0.25);
+    for (let side of [-1, 1]) {
+      let tail = s(d, ru(0.09, 0.055, 0.35), r.dark, side * 0.09, 0.06, -0.42);
+      tail.rotation.y = side * 0.45;
+      s(m[side === -1 ? 0 : 1], nu(0.082, 0.082, 0.1, 8), r.white, 0, -0.22, 0);
+      s(c[side === -1 ? 0 : 1], eu(0.115, 10, 8), r.body, 0, -0.29, 0.06, 1, 0.7, 1.5);
+    }
+    let sash = s(o, ru(0.09, 0.4, 0.05), r.dark, 0, 0.68, 0.22);
+    sash.rotation.z = -0.55;
     h.position.set(0.3, 0.68, 0.26);
-    for (let e = 0; e < 4; e++) {
-      let t = s(h, ru(0.055, 0.25, 0.045), e % 2 ? r.accent : r.metal, 0, 0.02, 0.13);
-      t.rotation.z = e * Math.PI / 4;
-    }
-    (s(h, eu(0.075, 12, 8), r.dark, 0, 0.03, 0.13),
-      s(h, ru(0.08, 0.13, 0.08), r.dark, 0, -0.12, -0.04),
-      g.push(new H(0.3, 0.72, 0.55)),
-      (_.armBase = [
-        [-1.15, 0.18],
-        [-1.28, -0.18],
-      ]),
-      (_.swingLeft = !0));
+    s(h, brawlerProjectileGeometry(`shuriken`), r.metal, 0, 0.02, 0.13).rotation.x = 0.7;
+    g.push(new H(0.3, 0.72, 0.55));
+    _.armBase = [[-0.8, 0.3], [-1.28, -0.18]];
+    _.swingLeft = !0;
   } else if (e.id === "ello") {
-    (s(d, ru(0.48, 0.08, 0.12), r.accent, 0, 0.17, -0.06),
-      s(d, ru(0.18, 0.12, 0.07), r.dark, 0, 0.2, 0.13),
-      s(d, nu(0.06, 0.06, 0.27, 10), r.accent, 0, 0.37, -0.02));
-    h.position.set(0.34, 0.69, 0.25);
-    let e = s(h, ru(0.045, 0.045, 0.63), r.white, 0, 0.01, 0.22);
-    e.rotation.x = 0.16;
-    (s(h, ru(0.17, 0.055, 0.06), r.metal, 0, -0.02, -0.06),
-      s(h, ru(0.065, 0.055, 0.2), r.dark, 0, -0.01, -0.25),
-      s(d, ru(0.3, 0.12, 0.12), r.body, 0, -0.23, -0.13),
-      g.push(new H(0.34, 0.73, 0.54)),
-      (_.armBase = [
-        [-1.18, 0.12],
-        [-1.3, -0.2],
-      ]),
-      (_.swingLeft = !0));
-  } else if (e.id === "syafiah") {
-    (s(d, iu(0.3, 0.52), r.accent, 0, 0.01, -0.02),
-      s(d, ru(0.32, 0.09, 0.12), r.dark, 0, -0.19, 0.17),
-      s(o, ru(0.25, 0.1, 0.2), r.dark, 0, 0.73, -0.17));
-    h.position.set(0.3, 0.68, 0.25);
-    for (let e = 0; e < 3; e++) {
-      let t = s(h, ru(0.035, 0.04, 0.23), r.wood, e * 0.1 - 0.1, 0.02, 0.18 + Math.abs(e - 1) * 0.1);
-      t.rotation.y = (e - 1) * 0.22;
+    s(d, iu(0.32, 0.48), r.black, 0, 0.035, -0.025);
+    s(d, ru(0.51, 0.075, 0.06), r.accent, 0, 0.14, 0.23);
+    for (let side of [-1, 1]) {
+      let fringe = s(d, ru(0.14, 0.2, 0.1), r.black, side * 0.19, 0.14, 0.19);
+      fringe.rotation.z = side * 0.45;
+      s(d, ru(0.065, 0.055, 0.37), r.accent, side * 0.09, 0.08, -0.42).rotation.y = side * 0.35;
+      for (let row = 0; row < 3; row++) {
+        s(o, ru(0.23, 0.085, 0.16), r.accent, side * 0.29, 0.91 - row * 0.075, 0);
+        s(o, ru(0.2, 0.065, 0.16), r.accent, side * 0.16, 0.42 - row * 0.065, 0.13);
+      }
+      s(c[side === -1 ? 0 : 1], ru(0.14, 0.2, 0.065), r.dark, 0, -0.16, 0.1);
     }
-    (s(h, nu(0.025, 0.025, 0.4, 8), r.metal, 0, 0.01, 0.22).rotation.x = Math.PI / 2,
-      s(h, ru(0.025, 0.035, 0.47), r.white, 0, 0.04, 0.25),
-      g.push(new H(0.3, 0.72, 0.55)),
-      (_.armBase = [
-        [-1.12, 0.18],
-        [-1.32, -0.16],
-      ]),
-      (_.swingLeft = !0));
+    for (let row = 0; row < 4; row++) s(o, ru(0.39, 0.075, 0.08), r.accent, 0, 0.77 - row * 0.08, 0.2);
+    let scabbard = s(o, ru(0.07, 0.07, 0.83), r.dark, -0.25, 0.42, -0.22);
+    scabbard.rotation.y = -0.35;
+    h.position.set(0.23, 0.7, 0.23);
+    s(h, ru(0.065, 0.035, 0.7), r.metal, 0, 0, 0.36);
+    s(h, nu(0, 0.04, 0.16, 4), r.metal, 0, 0, 0.78).rotation.x = Math.PI / 2;
+    s(h, nu(0.11, 0.11, 0.035, 8), r.wood, 0, 0, -0.025).rotation.x = Math.PI / 2;
+    s(h, ru(0.065, 0.06, 0.23), r.dark, 0, 0, -0.15);
+    for (let j = 0; j < 3; j++) s(h, ru(0.07, 0.063, 0.025), r.accent, 0, 0, -0.08 - j * 0.06);
+    g.push(new H(0.23, 0.73, 0.9));
+    _.armBase = [[-1.2, 0.45], [-1.3, -0.2]];
+    _.swingLeft = !0;
+  } else if (e.id === "syafiah") {
+    s(d, iu(0.335, 0.55), r.body, 0, 0.045, -0.05);
+    for (let side of [-1, 1]) s(d, eu(0.09, 8, 6), r.accent, side * 0.24, -0.12, 0.05, 0.7, 2.1, 0.8);
+    // Green cloak, leather quiver and boots give a readable ranger silhouette.
+    s(o, nu(0.18, 0.34, 0.65, 6), r.dark, 0, 0.55, -0.2, 1, 1, 0.4);
+    s(o, nu(0.09, 0.075, 0.43, 8), r.wood, 0.2, 0.69, -0.27).rotation.z = -0.2;
+    for (let j = 0; j < 3; j++) s(o, ru(0.025, 0.4, 0.025), r.accent, 0.13 + j * 0.05, 0.91, -0.27);
+    s(o, ru(0.4, 0.07, 0.07), r.wood, 0, 0.44, 0.2);
+    for (let leg of c) s(leg, nu(0.1, 0.12, 0.18, 8), r.wood, 0, -0.22, 0);
+    h.position.set(-0.16, 0.73, 0.36);
+    // Bow lies across the aim direction, visible from the top-down camera.
+    const points = [[-0.46, -0.1], [-0.34, 0.12], [-0.18, 0.21], [0, 0.24], [0.18, 0.21], [0.34, 0.12], [0.46, -0.1]];
+    for (let j = 1; j < points.length; j++) {
+      let [x1, z1] = points[j - 1], [x2, z2] = points[j];
+      let limb = s(h, ru(0.045, 0.045, Math.hypot(x2 - x1, z2 - z1)), r.wood, (x1 + x2) / 2, 0, (z1 + z2) / 2);
+      limb.rotation.y = Math.atan2(x2 - x1, z2 - z1);
+    }
+    let bowRig = new ut();
+    h.add(bowRig);
+    h.userData.bowRig = bowRig;
+    bowRig.userData.strings = [-1, 1].map(side => s(bowRig, ru(1, 0.013, 0.013), r.white, side * 0.23, 0, -0.1));
+    bowRig.userData.arrow = s(bowRig, brawlerProjectileGeometry(`arrow`), r.accent, 0, 0, 0.25, 0.75, 0.75, 0.75);
+    g.push(new H(-0.16, 0.73, 0.8));
+    _.armBase = [[-1.5, 0.05], [-1.1, -0.6]];
   } else {
     (s(d, eu(0.2), r.skin, 0, -0.085, 0.2, 1, 0.78, 0.5), s(d, ru(0.065, 0.2, 0.44), r.accent, 0, 0.27, -0.02));
     for (let e of [-1, 1]) s(o, eu(0.14), r.accent, e * 0.37, 0.88, 0);
@@ -557,7 +598,12 @@ var du = 1,
           this.parryT = 0;
           context.parried = !0;
           this.addCharge(140);
-          t.takeDamage(Math.min(this.def.super.counterDamage, Math.round(e * 0.9)), this, !0);
+          // The katana counters in its actual arc, never damages a distant shooter remotely.
+          this.attackSerial++;
+          this.recoil = 1;
+          this.game.combat.slash(this, faceX, faceZ, {
+            ...this.def.super, kind: `melee`, damage: this.def.super.counterDamage,
+          }, !0);
           this.game.effects.impact(this.x + faceX * 0.7, 0.72, this.z + faceZ * 0.7, this.superColor, 12);
           this.game.audio.play(`zap`, this.x, this.z);
           return 0;
@@ -772,6 +818,7 @@ var du = 1,
           this.itemSpeedT > 0 && (n *= 1.35),
           this.speedBoostT > 0 && (n *= 1.12),
           this.slowT > 0 && (n *= 0.85),
+          this.isCharging && this.def.id === `syafiah` && (n *= 0.8),
           this.burst && this.burst.a.kind !== `melee` && (n *= 0.82),
           t.state === `countdown` && (n = 0),
           surface === BIOME_SURFACE.MUD && (n *= gameplay?.mudMoveMultiplier ?? 1));
@@ -830,6 +877,24 @@ var du = 1,
       if (n.electricCore) {
         let t = 1 + Math.sin(r * 13) * 0.08 + this.recoil * 0.32;
         (n.electricCore.scale.setScalar(t), (n.electricCore.rotation.z += e * (5 + this.recoil * 12)));
+      }
+      if (this.def.id === `ello`) {
+        n.weapon.rotation.y = this.parryT > 0 ? -1.1 : -0.3 + this.recoil * 1.5;
+        n.weapon.rotation.z = this.parryT > 0 ? 0.65 : 0;
+      } else if (this.def.id === `naka`) {
+        n.weapon.rotation.y = this.recoil * -1.2;
+        n.weapon.scale.setScalar(this.recoil > 0.65 ? 0.15 : 1);
+      } else if (n.weapon.userData.bowRig) {
+        let rig = n.weapon.userData.bowRig, pull = this.chargeLevel * 0.28;
+        rig.userData.strings.forEach((string, index) => {
+          let side = index === 0 ? -1 : 1;
+          string.position.set(side * 0.23, 0, -0.1 - pull / 2);
+          string.scale.x = Math.hypot(0.46, pull);
+          string.rotation.y = side * Math.atan2(pull, 0.46);
+        });
+        rig.userData.arrow.position.z = 0.25 - pull;
+        rig.userData.arrow.visible = this.ammo >= 1 && this.recoil < 0.4;
+        n.arms[1].rotation.x = -1.1 + this.chargeLevel * 0.6;
       }
       let c = n.pose.armBase;
       if (n.pose.punch)

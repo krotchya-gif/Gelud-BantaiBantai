@@ -42,6 +42,15 @@ var Su = class {
         this.bulletMesh.setColorAt(0, vu.set(1, 1, 1)),
         e.scene.add(this.bulletMesh),
         (this.bombPool = []));
+      this.weaponProjectiles = {};
+      for (let kind of [`shuriken`, `arrow`]) {
+        let mesh = new Yn(brawlerProjectileGeometry(kind), new Tn({ color: kind === `arrow` ? 0xe7c58b : 0xd4e2de }), bu);
+        mesh.count = 0;
+        mesh.frustumCulled = !1;
+        mesh.userData.noAO = !0;
+        e.scene.add(mesh);
+        this.weaponProjectiles[kind] = mesh;
+      }
       let n = new xr(0.2, 16, 12),
         r = new Nr({ color: 1776418, roughness: 0.35, metalness: 0.3 }),
         i = new xr(0.07, 8, 6);
@@ -283,8 +292,11 @@ var Su = class {
         let x = box.x - owner.x,
           z = box.z - owner.z,
           distance = Math.hypot(x, z);
-        if (distance <= reach + 0.4 && distance > 0.02 && (x * dx + z * dz) / distance >= minDot)
-          this.damageBox(box, attack.damage * owner.damageMul, owner);
+        if (distance <= reach + 0.4 && distance > 0.02 && (x * dx + z * dz) / distance >= minDot) {
+          const hit = this.game.world.raycast(owner.x, owner.z, box.x, box.z);
+          if (!hit || (hit.tx === box.tx && hit.ty === box.ty))
+            this.damageBox(box, attack.damage * owner.damageMul, owner);
+        }
       }
       let color = owner.bulletColor(isSuper),
         x = owner.x + dx * Math.min(reach * 0.72, 1.8),
@@ -375,6 +387,7 @@ var Su = class {
         i = t.effects,
         a = Ic + 0.06,
         o = 0;
+      const weaponCounts = { shuriken: 0, arrow: 0 };
       for (let s of this.bullets) {
         let c = s.speed * e;
         for (; c > 0 && s.alive;) {
@@ -463,17 +476,25 @@ var Su = class {
           l = $c(remaining / 0.8, 0.35, 1),
           u = s.melee ? s.radius * 1.2 : s.radius * (s.isSuper ? 3.6 : 3),
           d = s.radius * (s.melee ? 1 : 0.8) * l;
+        if (this.weaponProjectiles[s.a.projectile]) {
+          let kind = s.a.projectile, scale = s.isSuper ? 1.35 : 1;
+          _u.set(0, kind === `shuriken` ? t.elapsed * 28 : Math.atan2(s.dx, s.dz), 0);
+          mu.setFromEuler(_u);
+          pu.compose(hu.set(s.x, yu, s.z), mu, gu.setScalar(scale));
+          this.weaponProjectiles[kind].setMatrixAt(weaponCounts[kind]++, pu);
+        } else {
         (_u.set(0, Math.atan2(s.dx, s.dz) + (s.a.electric ? Math.sin(t.elapsed * 45 + s.travel * 7) * 0.08 : 0), 0),
           mu.setFromEuler(_u),
           pu.compose(hu.set(s.x, yu, s.z), mu, gu.set(d, d * (s.melee ? 0.7 : 1), u)),
           this.bulletMesh.setMatrixAt(o, pu));
         let f = s.isSuper ? 3.6 : 2.8;
         (this.bulletMesh.setColorAt(o, vu.copy(s.color).multiplyScalar(f * (s.melee ? 0.6 : 1))), o++);
+        }
         let p = s.a.kind === `spread` ? 1.6 / s.a.pellets : s.melee ? 0.5 : 1;
         (r.addLight(s.x, yu, s.z, s.color, (s.isSuper ? 2.6 : 1.9) * p, 4.2),
           (s.trail -= e),
           s.trail <= 0 &&
-            ((s.trail = s.a.electric ? 0.045 : 0.03),
+            ((s.trail = s.a.projectile ? 0.09 : s.a.electric ? 0.045 : 0.03),
             s.a.electric
               ? i.electricTrail(s.x, yu, s.z, s.color, s.radius * (s.isSuper ? 2.5 : 2))
               : i.trail(s.x, yu, s.z, s.color, s.radius * (s.melee ? 2.2 : 1.6))));
@@ -485,6 +506,11 @@ var Su = class {
         (this.bulletMesh.count = o),
         (this.bulletMesh.instanceMatrix.needsUpdate = !0),
         this.bulletMesh.instanceColor && (this.bulletMesh.instanceColor.needsUpdate = !0));
+      for (let kind of Object.keys(weaponCounts)) {
+        let mesh = this.weaponProjectiles[kind];
+        mesh.count = weaponCounts[kind];
+        if (mesh.count) mesh.instanceMatrix.needsUpdate = !0;
+      }
       for (let n of this.bombs) {
         let a = n.slot,
           o = n.a;
@@ -593,6 +619,7 @@ var Su = class {
     clear() {
       let e = this.game.scene;
       ((this.bullets.length = 0), (this.bulletMesh.count = 0));
+      for (let mesh of Object.values(this.weaponProjectiles)) mesh.count = 0;
       for (let e of this.bombs) ((e.slot.busy = !1), (e.slot.group.visible = !1), (e.slot.ring.visible = !1));
       this.bombs.length = 0;
       for (let t of this.boxes) (t.alive && e.remove(t.mesh), t.mat.dispose());
