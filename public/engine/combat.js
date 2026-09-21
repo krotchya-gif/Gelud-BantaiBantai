@@ -33,7 +33,9 @@ var Su = class {
         (this.cubes = []),
         (this.cubePool = []),
         (this.items = []),
-        (this.itemPool = []));
+        (this.itemPool = []),
+        (this.arrowShowers = []),
+        (this.arrowFalls = []));
       let t = new xr(1, 10, 8);
       ((this.bulletMesh = new Yn(t, new Tn({ color: 16777215 }), bu)),
         (this.bulletMesh.count = 0),
@@ -51,6 +53,11 @@ var Su = class {
         e.scene.add(mesh);
         this.weaponProjectiles[kind] = mesh;
       }
+      this.arrowShowerDiscGeometry = new mr(3.4, 48).rotateX(-Math.PI / 2);
+      this.arrowShowerRingGeometry = new br(3.22, 3.4, 64).rotateX(-Math.PI / 2);
+      this.arrowShowerDiscMaterial = new Tn({ color: 0xffd17a, transparent: !0, opacity: 0.18, depthWrite: !1 });
+      this.arrowShowerRingMaterial = new Tn({ color: 0xffe5a5, transparent: !0, opacity: 0.92, depthWrite: !1 });
+      this.arrowShowerColor = new J(0xffd17a);
       let n = new xr(0.2, 16, 12),
         r = new Nr({ color: 1776418, roughness: 0.35, metalness: 0.3 }),
         i = new xr(0.07, 8, 6);
@@ -230,6 +237,7 @@ var Su = class {
         range: a.range,
         radius: a.radius,
         damage: a.damage * e.damageMul,
+        returnDamage: a.returnDamageMultiplier === undefined ? null : a.damage * e.damageMul * a.returnDamageMultiplier,
         color: c,
         alive: !0,
         trail: 0,
@@ -244,6 +252,7 @@ var Su = class {
       if (!projectile.a.returning || projectile.returning) return !1;
       ((projectile.returning = !0),
         (projectile.phaseTravel = 0),
+        projectile.returnDamage !== null && (projectile.damage = projectile.returnDamage),
         projectile.hitTargets.clear());
       return !0;
     }
@@ -285,7 +294,7 @@ var Su = class {
           melee: !0,
           returning: !1,
         }, dealt);
-        attack.knockback && target.knock.set((x / distance) * attack.knockback, (z / distance) * attack.knockback);
+        attack.knockback && target.applyKnockback((x / distance) * attack.knockback, (z / distance) * attack.knockback);
       }
       for (let box of this.boxes) {
         if (!box.alive) continue;
@@ -303,6 +312,78 @@ var Su = class {
         z = owner.z + dz * Math.min(reach * 0.72, 1.8);
       this.game.effects.impact(x, 0.68, z, color, 14);
       this.game.effects.muzzle(owner.x + dx * 0.45, 0.75, owner.z + dz * 0.45, dx, dz, color, 0.8);
+    }
+    dashSlash(owner, dash, attack) {
+      let sx = dash.sx,
+        sz = dash.sz,
+        dx = dash.tx - sx,
+        dz = dash.tz - sz,
+        lengthSq = dx * dx + dz * dz,
+        radius = attack.radius || 0.72;
+      if (lengthSq < 0.0001) return;
+      for (let target of this.game.brawlers) {
+        if (!target.alive || target === owner || target.airborne) continue;
+        let along = $c(((target.x - sx) * dx + (target.z - sz) * dz) / lengthSq, 0, 1),
+          hitX = sx + dx * along,
+          hitZ = sz + dz * along,
+          offX = target.x - hitX,
+          offZ = target.z - hitZ,
+          distance = Math.hypot(offX, offZ);
+        if (distance > radius + 0.4 || !this.game.world.hasLineOfSight(hitX, hitZ, target.x, target.z)) continue;
+        let damage = Math.round(attack.damage * owner.damageMul),
+          dirX = distance > 0.02 ? offX / distance : dash.dx,
+          dirZ = distance > 0.02 ? offZ / distance : dash.dz,
+          dealt = target.takeDamage(damage, owner, !1, { kind: `melee`, dirX: dash.dx, dirZ: dash.dz });
+        owner.onAttackHit(target, {
+          a: attack,
+          attackId: owner.attackSerial,
+          travel: along * Math.sqrt(lengthSq),
+          range: attack.range,
+          melee: !0,
+          returning: !1,
+        }, dealt);
+        attack.knockback && target.applyKnockback(dirX * attack.knockback, dirZ * attack.knockback);
+      }
+      let color = owner.bulletColor(!0),
+        centerX = (sx + dash.tx) * 0.5,
+        centerZ = (sz + dash.tz) * 0.5;
+      (this.game.effects.impact(centerX, 0.68, centerZ, color, 18),
+        this.game.effects.muzzle(dash.tx, 0.75, dash.tz, dash.dx, dash.dz, color, 1.15),
+        this.game.audio.play(`shotBig`, owner.x, owner.z));
+    }
+    startArrowShower(owner, x, z, attack) {
+      let dx = x - owner.x,
+        dz = z - owner.z,
+        distance = Math.hypot(dx, dz) || 1,
+        range = attack.range;
+      distance > range && ((x = owner.x + dx / distance * range), (z = owner.z + dz / distance * range));
+      x = $c(x, -21.4, 21.4);
+      z = $c(z, -21.4, 21.4);
+      let marker = new ut(),
+        disc = new Ln(this.arrowShowerDiscGeometry, this.arrowShowerDiscMaterial),
+        ring = new Ln(this.arrowShowerRingGeometry, this.arrowShowerRingMaterial);
+      ((disc.userData.noAO = !0),
+        (ring.userData.noAO = !0),
+        (disc.renderOrder = 3),
+        (ring.renderOrder = 3),
+        marker.add(disc, ring),
+        marker.position.set(x, 0.055, z),
+        (marker.userData.noAO = !0),
+        (marker.renderOrder = 3),
+        this.game.scene.add(marker),
+        this.arrowShowers.push({ owner, x, z, attack, marker, t: 0, wave: 0, done: !1 }));
+      owner.attackSerial++;
+    }
+    damageArrowShower(shower) {
+      let { owner, x, z, attack } = shower,
+        radius = attack.areaRadius,
+        damage = Math.round(attack.waveDamage * owner.damageMul);
+      for (let target of this.game.brawlers) {
+        if (!target.alive || target === owner || target.airborne || Math.hypot(target.x - x, target.z - z) > radius + 0.24) continue;
+        target.takeDamage(damage, owner, !1, { kind: `arrow-shower`, x, z });
+      }
+      this.game.effects.impact(x, 0.08, z, this.arrowShowerColor, 18);
+      this.game.audio.play(`hit`, x, z);
     }
     spawnBomb(e, t, n, r, i, a, o, s) {
       let c = this.bombPool.find((e) => !e.busy);
@@ -359,7 +440,7 @@ var Su = class {
           let knockbackPower = n.knockback * (1 - (a / (c + 0.5)) * 0.5),
             o = a > 0.01 ? (i.x - e) / a : 1,
             s = a > 0.01 ? (i.z - t) / a : 0;
-          i.knock.set(o * knockbackPower, s * knockbackPower);
+          i.applyKnockback(o * knockbackPower, s * knockbackPower);
         }
       }
       for (let n of this.boxes) n.alive && Math.hypot(n.x - e, n.z - t) < c + 0.4 && this.damageBox(n, l, r);
@@ -447,11 +528,12 @@ var Su = class {
                 dirZ: s.dz,
               },
                 dealt = target.takeDamage(s.damage, s.owner, !1, context);
-              (s.owner.onAttackHit(target, s, dealt),
-                s.a.knockback
-                  ? target.knock.set(s.dx * s.a.knockback, s.dz * s.a.knockback)
-                  : target.knock.set(target.knock.x + s.dx * 1.2, target.knock.y + s.dz * 1.2),
-                s.a.electric ? i.electricImpact(s.x, yu, s.z, s.color, s.isSuper) : i.impact(s.x, yu, s.z, s.color, 8),
+              s.owner.onAttackHit(target, s, dealt);
+              if (!s.a.noKnockback)
+                s.a.knockback !== undefined
+                  ? target.applyKnockback(s.dx * s.a.knockback, s.dz * s.a.knockback)
+                  : target.applyKnockback(s.dx * 1.2, s.dz * 1.2, !0);
+              (s.a.electric ? i.electricImpact(s.x, yu, s.z, s.color, s.isSuper) : i.impact(s.x, yu, s.z, s.color, 8),
                 i.flash(s.x, yu, s.z, s.color, 5, 4, 0.12));
               (context.parried || !(s.a.pierce || s.a.returning)) && (s.alive = !1);
               break;
@@ -506,6 +588,55 @@ var Su = class {
         (this.bulletMesh.count = o),
         (this.bulletMesh.instanceMatrix.needsUpdate = !0),
         this.bulletMesh.instanceColor && (this.bulletMesh.instanceColor.needsUpdate = !0));
+      for (let shower of this.arrowShowers) {
+        shower.t += e;
+        let attack = shower.attack,
+          fallDuration = 0.24;
+        while (shower.wave < attack.waveCount) {
+          let waveAt = attack.warningDelay + shower.wave * attack.waveInterval,
+            fallAt = waveAt - fallDuration;
+          if (!shower.fallSpawned && shower.t >= fallAt) {
+            shower.fallSpawned = !0;
+            for (let count = 0; count < attack.projectileCount; count++) {
+              let angle = Math.random() * Math.PI * 2,
+                distance = Math.sqrt(Math.random()) * attack.areaRadius;
+              this.arrowFalls.push({
+                x: shower.x + Math.cos(angle) * distance,
+                z: shower.z + Math.sin(angle) * distance,
+                angle,
+                t: Math.max(0, shower.t - fallAt),
+                duration: fallDuration,
+              });
+            }
+          }
+          if (shower.t < waveAt) break;
+          this.damageArrowShower(shower);
+          shower.wave++;
+          shower.fallSpawned = !1;
+        }
+        shower.marker.scale.setScalar(1 + Math.sin(t.elapsed * 18) * 0.025);
+        shower.wave >= attack.waveCount && shower.t >= attack.warningDelay + (attack.waveCount - 1) * attack.waveInterval + 0.55 &&
+          ((shower.done = !0), shower.marker.removeFromParent());
+      }
+      let liveShowers = 0;
+      for (let index = 0; index < this.arrowShowers.length; index++)
+        !this.arrowShowers[index].done && (this.arrowShowers[liveShowers++] = this.arrowShowers[index]);
+      this.arrowShowers.length = liveShowers;
+      let liveFalls = 0;
+      for (let index = 0; index < this.arrowFalls.length; index++) {
+        let fall = this.arrowFalls[index];
+        fall.t += e;
+        let progress = $c(fall.t / fall.duration, 0, 1);
+        if (progress >= 1) continue;
+        if (weaponCounts.arrow < bu) {
+          _u.set(0.82, fall.angle, 0);
+          mu.setFromEuler(_u);
+          pu.compose(hu.set(fall.x, 5.2 * (1 - progress), fall.z), mu, gu.setScalar(0.8));
+          this.weaponProjectiles.arrow.setMatrixAt(weaponCounts.arrow++, pu);
+        }
+        this.arrowFalls[liveFalls++] = fall;
+      }
+      this.arrowFalls.length = liveFalls;
       for (let kind of Object.keys(weaponCounts)) {
         let mesh = this.weaponProjectiles[kind];
         mesh.count = weaponCounts[kind];
@@ -603,11 +734,12 @@ var Su = class {
         for (let brawler of t.brawlers) {
           if (!brawler.alive || brawler.airborne || brawler.heldItem || Math.hypot(brawler.x - item.x, brawler.z - item.z) >= 0.82) continue;
           let kind = item.kind;
+          let label = kind === `ammo` && !brawler.usesAmmo ? `FOCUS` : kind.toUpperCase();
           ((brawler.heldItem = kind),
             this.removeItem(item),
             i.burst(item.x, 0.7, item.z, this.itemLights[kind], 10, 3.1),
-            (!brawler.hidden || brawler.isPlayer) && t.hud.floatText(brawler.x, 2, brawler.z, `${kind.toUpperCase()}!`, `power`),
-            brawler.isPlayer && t.hud.toast(`${kind.toUpperCase()} READY · TAP ITEM OR PRESS F`),
+            (!brawler.hidden || brawler.isPlayer) && t.hud.floatText(brawler.x, 2, brawler.z, `${label}!`, `power`),
+            brawler.isPlayer && t.hud.toast(`${label} READY · TAP ITEM OR PRESS F`),
             t.audio.play(`pickup`, item.x, item.z));
           break;
         }
@@ -620,6 +752,9 @@ var Su = class {
       let e = this.game.scene;
       ((this.bullets.length = 0), (this.bulletMesh.count = 0));
       for (let mesh of Object.values(this.weaponProjectiles)) mesh.count = 0;
+      for (let shower of this.arrowShowers) shower.marker.removeFromParent();
+      this.arrowShowers.length = 0;
+      this.arrowFalls.length = 0;
       for (let e of this.bombs) ((e.slot.busy = !1), (e.slot.group.visible = !1), (e.slot.ring.visible = !1));
       this.bombs.length = 0;
       for (let t of this.boxes) (t.alive && e.remove(t.mesh), t.mat.dispose());

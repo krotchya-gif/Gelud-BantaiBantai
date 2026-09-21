@@ -337,6 +337,13 @@ var du = 1,
         (this.ammo = 3),
         (this.reloadT = 0),
         (this.superCharge = 0),
+        (this.comboStep = 0),
+        (this.comboResetT = 0),
+        (this.meleeLunge = null),
+        (this.slashAnim = null),
+        (this.slashTrailT = 0),
+        (this.slashTip = new H()),
+        (this.iaidoState = null),
         (this.cubes = 0),
         (this.kills = 0),
         (this.alive = !0),
@@ -397,6 +404,29 @@ var du = 1,
     get superReady() {
       return this.superCharge >= 1;
     }
+    get usesAmmo() {
+      return this.def.id !== `ello` && this.def.id !== `syafiah`;
+    }
+    get knockbackImmune() {
+      return this.def.id === `ello` && (
+        this.parryT > 0 ||
+        this.iaidoState !== null ||
+        (this.meleeLunge !== null && this.meleeLunge.remaining > 0) ||
+        (this.slashAnim !== null && this.slashAnim.t < this.slashAnim.duration) ||
+        this.dash?.attack?.iaido === !0
+      );
+    }
+    applyKnockback(x, z, additive = !1) {
+      if (this.knockbackImmune) {
+        this.knock.set(0, 0);
+        return;
+      }
+      let resistance = this.def.knockbackResistance ?? 0;
+      ((x *= 1 - resistance), (z *= 1 - resistance));
+      additive
+        ? (this.knock.set(this.knock.x + x, this.knock.y + z))
+        : this.knock.set(x, z);
+    }
     get airborne() {
       return this.leap !== null;
     }
@@ -411,32 +441,57 @@ var du = 1,
       return this.alive && !this.leap && !this.dash && this.game.state !== `countdown`;
     }
     attack(e, t, n, r, chargeDuration) {
-      return !this.canAct() || this.ammo < 1 || this.fireCooldown > 0 || this.burst
-        ? !1
-        : (--this.ammo,
-          (() => {
-            let attack = this.def.attack;
-            if (this.def.id === `syafiah`) {
-              let held = Number.isFinite(chargeDuration) ? chargeDuration : attack.chargeTime,
-                charge = $c(held / attack.chargeTime, 0.25, 1),
-                range = this.game.world.surfaceAt(this.x, this.z) === BIOME_SURFACE.LOW_GRAVITY
-                  ? (this.def.terrainAffinity?.rangeMultiplier ?? 1.1)
-                  : 1;
-              attack = {
-                ...attack,
-                damage: Math.round(attack.damage * (0.52 + charge * 0.48) * (held >= 0.68 && held <= 0.82 ? 1.1 : 1)),
-                range: attack.range * range,
-                speed: attack.speed * (0.9 + charge * 0.1),
-              };
-            } else if (this.def.id === `ace` && this.stationaryT >= 0.45) {
-              attack = { ...attack, damage: Math.round(attack.damage * 1.1) };
-              this.stationaryT = 0;
-            }
-            this.startVolley(attack, e, t, n, r, !1);
-            this.isCharging = !1;
-            this.chargeLevel = 0;
-          })(),
-          !0);
+      if (!this.canAct() || (this.usesAmmo && this.ammo < 1) || this.fireCooldown > 0 || this.burst) return !1;
+      let attack = this.def.attack,
+        recovery = 0;
+      if (this.usesAmmo) this.ammo--;
+      if (this.def.id === `syafiah`) {
+        let held = Number.isFinite(chargeDuration) ? Math.max(0, chargeDuration) : attack.chargeTime,
+          charge = $c(held / attack.chargeTime, 0, 1),
+          terrainRange = this.game.world.surfaceAt(this.x, this.z) === BIOME_SURFACE.LOW_GRAVITY
+            ? (this.def.terrainAffinity?.rangeMultiplier ?? 1.1)
+            : 1,
+          damage = el(attack.quickDamage, attack.maxDamage, charge),
+          range = el(attack.quickRange, attack.maxRange, charge),
+          speed = el(attack.quickSpeed, attack.maxSpeed, charge);
+        attack = {
+          ...attack,
+          damage: Math.round(damage * (held >= 0.70 && held <= 0.80 ? 1.1 : 1)),
+          range: range * terrainRange,
+          speed,
+        };
+        recovery = attack.shotRecovery;
+      } else if (this.def.id === `ello`) {
+        let comboIndex = this.comboStep,
+          step = this.def.attack.combo[comboIndex] || this.def.attack.combo[0];
+        attack = { ...attack, damage: step.damage };
+        recovery = step.recovery;
+        this.slashAnim = {
+          t: 0,
+          duration: Math.max(0.28, step.recovery * 0.92),
+          step: comboIndex,
+          isSuper: !1,
+        };
+        this.knock.set(0, 0);
+        this.slashTrailT = 0;
+        this.comboStep = (this.comboStep + 1) % this.def.attack.combo.length;
+        this.comboResetT = this.def.attack.comboReset;
+        let length = Math.hypot(e, t) || 1;
+        this.meleeLunge = {
+          dx: e / length,
+          dz: t / length,
+          remaining: step.lunge,
+          speed: step.lunge / this.def.attack.lungeDuration,
+        };
+      } else if (this.def.id === `ace` && this.stationaryT >= 0.45) {
+        attack = { ...attack, damage: Math.round(attack.damage * 1.1) };
+        this.stationaryT = 0;
+      }
+      this.startVolley(attack, e, t, n, r, !1);
+      if (recovery) this.fireCooldown = recovery;
+      this.isCharging = !1;
+      this.chargeLevel = 0;
+      return !0;
     }
     useSuper(e, t, n, r) {
       if (!this.canAct() || !this.superReady || this.burst) return !1;
@@ -448,6 +503,27 @@ var du = 1,
         attack = { ...attack, range: attack.range * (this.def.terrainAffinity?.rangeMultiplier ?? 1.1) };
       if (attack.kind === `dash`) {
         if (!this.startDash(attack, e, t, n, r)) return !1;
+      } else if (attack.kind === `iaido`) {
+        let length = Math.hypot(e, t) || 1;
+        ((e /= length), (t /= length));
+        this.meleeLunge = null;
+        (this.aimAngle = Math.atan2(e, t));
+        (this.facing = this.aimAngle);
+        (this.root.rotation.y = this.facing);
+        this.iaidoState = { attack, dx: e, dz: t, targetX: n, targetZ: r, empowered: !1 };
+        this.parryT = attack.guardDuration;
+        this.knock.set(0, 0);
+        this.aimHold = attack.guardDuration;
+        this.recoil = 1;
+        this.game.effects.impact(this.x + e * 0.65, 0.72, this.z + t * 0.65, this.superColor, 8);
+      } else if (attack.kind === `arrow-shower`) {
+        let length = Math.hypot(e, t) || 1;
+        ((e /= length), (t /= length));
+        (this.aimAngle = Math.atan2(e, t));
+        (this.facing = this.aimAngle);
+        (this.root.rotation.y = this.facing);
+        this.aimHold = 0.55;
+        this.game.combat.startArrowShower(this, n, r, attack);
       } else if (attack.kind === `parry`) {
         let length = Math.hypot(e, t) || 1;
         ((e /= length),
@@ -579,7 +655,7 @@ var du = 1,
         this.lastVoltHit = this.game.elapsed;
         if (this.voltChain > previousChain) this.addCharge(70);
       }
-      if (this.def.id === `naka` && projectile.returning) this.speedBoostT = 1.2;
+      if (this.def.id === `naka` && projectile.returning) this.speedBoostT = 1.5;
       if (this.def.id === `ello` && projectile.melee && projectile.travel >= projectile.range * 0.5) this.addCharge(90);
     }
     addCharge(e, rate = 0.75) {
@@ -598,6 +674,13 @@ var du = 1,
           this.parryT = 0;
           context.parried = !0;
           this.addCharge(140);
+          if (this.iaidoState) {
+            this.iaidoState.empowered = !0;
+            this.recoil = 1;
+            this.game.effects.impact(this.x + faceX * 0.7, 0.72, this.z + faceZ * 0.7, this.superColor, 12);
+            this.game.audio.play(`zap`, this.x, this.z);
+            return 0;
+          }
           // The katana counters in its actual arc, never damages a distant shooter remotely.
           this.attackSerial++;
           this.recoil = 1;
@@ -650,7 +733,7 @@ var du = 1,
         case `heal`:
           return this.hp < this.maxHp;
         case `ammo`:
-          return this.ammo < 3;
+          return this.usesAmmo ? this.ammo < 3 : !this.superReady;
         case `super`:
           return !this.superReady;
         default:
@@ -660,7 +743,7 @@ var du = 1,
     useHeldItem() {
       if (!this.canUseHeldItem()) return !1;
       let item = this.heldItem,
-        names = { shield: `Shield`, speed: `Speed boost`, heal: `Medkit`, ammo: `Ammo refill`, super: `Super charger` };
+        names = { shield: `Shield`, speed: `Speed boost`, heal: `Medkit`, ammo: this.usesAmmo ? `Ammo refill` : `Focus`, super: `Super charger` };
       this.heldItem = null;
       switch (item) {
         case `shield`:
@@ -673,7 +756,8 @@ var du = 1,
           this.heal(this.maxHp * 0.35);
           break;
         case `ammo`:
-          ((this.ammo = 3), (this.reloadT = 0));
+          if (this.usesAmmo) ((this.ammo = 3), (this.reloadT = 0));
+          else this.addCharge(this.def.superCharge * 0.2, 1);
           break;
         case `super`:
           this.addCharge(this.def.superCharge * 0.25, 1);
@@ -695,7 +779,7 @@ var du = 1,
           (this.heldItem === `heal` && health <= 0.58) ||
           (this.heldItem === `shield` && health <= 0.72 && nearest <= 4) ||
           (this.heldItem === `speed` && nearest > 3.5 && nearest < 12) ||
-          (this.heldItem === `ammo` && this.ammo <= 1) ||
+          (this.heldItem === `ammo` && (this.usesAmmo ? this.ammo <= 1 : this.superCharge <= 0.9)) ||
           (this.heldItem === `super` && !this.superReady && this.superCharge <= 0.75 && nearest < 8);
       use && this.useHeldItem();
     }
@@ -723,7 +807,11 @@ var du = 1,
          (this.shieldT = 0),
          (this.heldItem = null),
          (this.isCharging = !1),
-        (this.chargeLevel = 0),
+         (this.chargeLevel = 0),
+         (this.iaidoState = null),
+         (this.meleeLunge = null),
+         (this.comboStep = 0),
+         (this.comboResetT = 0),
         e && e !== this && e.kills++,
         this.game.onBrawlerDown(this, e));
     }
@@ -755,14 +843,16 @@ var du = 1,
           ? (this.stationaryT = Math.min(1, this.stationaryT + e))
           : (this.stationaryT = 0),
         (this.fireCooldown = Math.max(0, this.fireCooldown - e)),
+        this.comboResetT > 0 && ((this.comboResetT = Math.max(0, this.comboResetT - e)), this.comboResetT === 0 && (this.comboStep = 0)),
         (this.aimHold = Math.max(0, this.aimHold - e)),
         (this.revealT = Math.max(0, this.revealT - e)),
         (this.flash = Math.max(0, this.flash - e * 7)),
         (this.recoil = nl(this.recoil, 0, 14, e)),
+        this.slashAnim && (this.slashAnim.t += e),
         (this.punch[0] = nl(this.punch[0], 0, 16, e)),
         (this.punch[1] = nl(this.punch[1], 0, 16, e)),
         (this.squash = nl(this.squash, 0, 12, e)),
-        this.ammo < 3
+        this.usesAmmo && this.ammo < 3
           ? ((this.reloadT += e / this.def.reload),
             this.reloadT >= 1 && ((this.reloadT = 0), (this.ammo = Math.min(3, this.ammo + 1))))
           : (this.reloadT = 0),
@@ -772,6 +862,34 @@ var du = 1,
         for (t.timer -= e; t.timer <= 0 && t.left > 0;) (this.fireBurstShot(), t.left--, (t.timer += t.a.interval));
         (t.left <= 0 && (this.burst = null), (this.aimHold = Math.max(this.aimHold, 0.35)));
       }
+      if (this.iaidoState && this.parryT <= 0) {
+        let iaido = this.iaidoState,
+          attack = iaido.attack,
+          dashAttack = {
+            kind: `dash`,
+            pathSlash: !0,
+            iaido: !0,
+            range: attack.dashRange,
+            flight: attack.dashDuration,
+            damage: iaido.empowered ? attack.parryDamage : attack.baseDamage,
+            radius: attack.slashRadius,
+            arc: attack.arc,
+            color: attack.color,
+            breaksWalls: !1,
+        };
+        this.iaidoState = null;
+        this.slashAnim = {
+          t: 0,
+          duration: attack.dashDuration + 0.2,
+          step: 2,
+          isSuper: !0,
+        };
+        this.slashTrailT = 0;
+        this.knock.set(0, 0);
+        if (!this.startDash(dashAttack, iaido.dx, iaido.dz, iaido.targetX, iaido.targetZ))
+          t.combat.slash(this, iaido.dx, iaido.dz, { ...dashAttack, kind: `melee`, range: 1.15 }, !0);
+      }
+      if (this.knockbackImmune) this.knock.set(0, 0);
       let r = this.root.position;
       if (this.dash) {
         let dash = this.dash;
@@ -786,7 +904,8 @@ var du = 1,
           this.dash = null;
           this.vel.set(0, 0);
           this.squash = 1.1;
-          t.combat.slash(this, dash.dx, dash.dz, { ...dash.attack, range: 1.35 }, !0);
+          if (dash.attack.pathSlash) t.combat.dashSlash(this, dash, dash.attack);
+          else t.combat.slash(this, dash.dx, dash.dz, { ...dash.attack, range: 1.35 }, !0);
         }
       } else if (this.leap) {
         let i = this.leap;
@@ -816,9 +935,9 @@ var du = 1,
           world.isBushAt(r.x, r.z) &&
           (n *= this.def.terrainAffinity.moveMultiplier),
           this.itemSpeedT > 0 && (n *= 1.35),
-          this.speedBoostT > 0 && (n *= 1.12),
+          this.speedBoostT > 0 && (n *= 1.15),
           this.slowT > 0 && (n *= 0.85),
-          this.isCharging && this.def.id === `syafiah` && (n *= 0.8),
+          this.isCharging && this.def.id === `syafiah` && (n *= 0.88),
           this.burst && this.burst.a.kind !== `melee` && (n *= 0.82),
           t.state === `countdown` && (n = 0),
           surface === BIOME_SURFACE.MUD && (n *= gameplay?.mudMoveMultiplier ?? 1));
@@ -831,6 +950,13 @@ var du = 1,
         let i = this.knock.x,
           a = this.knock.y;
         ((r.x += (this.vel.x + i) * e), (r.z += (this.vel.y + a) * e));
+        if (this.meleeLunge) {
+          let lunge = this.meleeLunge,
+            amount = Math.min(lunge.remaining, lunge.speed * e);
+          ((r.x += lunge.dx * amount), (r.z += lunge.dz * amount));
+          lunge.remaining -= amount;
+          lunge.remaining <= 0 && (this.meleeLunge = null);
+        }
         let o = Math.exp(-7 * (gameplay?.friction ?? 1) * e);
         (this.knock.multiplyScalar(o), t.world.resolveCircle(r, Ic));
       }
@@ -871,16 +997,75 @@ var du = 1,
       ((n.body.position.y = o - Math.max(0, s) * 0.07),
         n.body.scale.set(1 + s * 0.09, 1 - s * 0.11, 1 + s * 0.09),
         this.leap || (n.body.rotation.x = (t ? 0.13 : 0) - this.recoil * 0.2),
-        (n.head.rotation.z = t ? Math.sin(this.walkPhase) * 0.05 : 0),
-        (n.weapon.position.z =
-          (n.weapon.userData.baseZ ?? (n.weapon.userData.baseZ = n.weapon.position.z)) - this.recoil * 0.17 - this.chargeLevel * 0.08));
+        (n.head.rotation.z = t ? Math.sin(this.walkPhase) * 0.05 : 0));
+      if (this.def.id !== `ello`)
+        n.weapon.position.z =
+          (n.weapon.userData.baseZ ?? (n.weapon.userData.baseZ = n.weapon.position.z)) - this.recoil * 0.17 - this.chargeLevel * 0.08;
       if (n.electricCore) {
         let t = 1 + Math.sin(r * 13) * 0.08 + this.recoil * 0.32;
         (n.electricCore.scale.setScalar(t), (n.electricCore.rotation.z += e * (5 + this.recoil * 12)));
       }
       if (this.def.id === `ello`) {
-        n.weapon.rotation.y = this.parryT > 0 ? -1.1 : -0.3 + this.recoil * 1.5;
-        n.weapon.rotation.z = this.parryT > 0 ? 0.65 : 0;
+        let weapon = n.weapon,
+          baseX = weapon.userData.baseX ?? (weapon.userData.baseX = weapon.position.x),
+          baseY = weapon.userData.baseY ?? (weapon.userData.baseY = weapon.position.y),
+          baseZ = weapon.userData.baseZ ?? (weapon.userData.baseZ = weapon.position.z),
+          slash = this.slashAnim,
+          yaw = -0.3,
+          pitch = 0,
+          roll = 0,
+          lift = 0;
+        if (slash) {
+          let p = $c(slash.t / slash.duration, 0, 1),
+            direction = slash.step === 1 ? -1 : 1,
+            startYaw = -direction * (slash.step === 2 ? 1.7 : 1.42),
+            endYaw = direction * (slash.step === 2 ? 1.2 : 0.96);
+          if (p < 0.25) {
+            let u = p / 0.25;
+            u = u * u * (3 - 2 * u);
+            yaw = el(-0.3, startYaw, u);
+            pitch = el(0, slash.step === 2 ? -0.9 : -0.16, u);
+            lift = Math.sin(u * Math.PI * 0.5) * (slash.step === 2 ? 0.2 : 0.1);
+          } else if (p < 0.67) {
+            let u = (p - 0.25) / 0.42;
+            u = 1 - Math.pow(1 - u, 3);
+            yaw = el(startYaw, endYaw, u);
+            pitch = el(slash.step === 2 ? -0.9 : -0.16, slash.step === 2 ? 0.38 : 0.12, u);
+            roll = direction * Math.sin(u * Math.PI) * 0.24;
+            lift = el(slash.step === 2 ? 0.2 : 0.1, -0.04, u);
+          } else {
+            let u = (p - 0.67) / 0.33;
+            u = u * u * (3 - 2 * u);
+            yaw = el(endYaw, -0.3, u);
+            pitch = el(slash.step === 2 ? 0.38 : 0.12, 0, u);
+            lift = el(-0.04, 0, u);
+          }
+          weapon.position.set(baseX + Math.sin(yaw) * 0.07, baseY + lift, baseZ - Math.max(0, Math.cos(yaw)) * 0.035);
+          weapon.rotation.set(pitch, yaw, roll);
+          n.body.rotation.y = -yaw * 0.18;
+          n.head.rotation.y = yaw * 0.06;
+
+          if (p >= 0.25 && p <= 0.72) {
+            this.slashTrailT -= e;
+            if (this.slashTrailT <= 0) {
+              this.slashTrailT = 0.022;
+              weapon.updateWorldMatrix(!0, !1);
+              let color = slash.isSuper ? this.superColor : this.lightColor;
+              this.slashTip.set(0, 0, 0.82);
+              weapon.localToWorld(this.slashTip);
+              this.game.effects.trail(this.slashTip.x, this.slashTip.y, this.slashTip.z, color, slash.isSuper ? 0.34 : 0.25);
+              this.slashTip.set(0, 0, 0.52);
+              weapon.localToWorld(this.slashTip);
+              this.game.effects.trail(this.slashTip.x, this.slashTip.y, this.slashTip.z, color, slash.isSuper ? 0.25 : 0.17);
+            }
+          }
+          if (slash.t >= slash.duration) this.slashAnim = null;
+        } else {
+          weapon.position.set(baseX, baseY, baseZ);
+          weapon.rotation.set(this.parryT > 0 ? -0.18 : 0, this.parryT > 0 ? -1.1 : -0.3, this.parryT > 0 ? 0.65 : 0);
+          n.body.rotation.y = nl(n.body.rotation.y, 0, 16, e);
+          n.head.rotation.y = nl(n.head.rotation.y, 0, 16, e);
+        }
       } else if (this.def.id === `naka`) {
         n.weapon.rotation.y = this.recoil * -1.2;
         n.weapon.scale.setScalar(this.recoil > 0.65 ? 0.15 : 1);
@@ -893,11 +1078,33 @@ var du = 1,
           string.rotation.y = side * Math.atan2(pull, 0.46);
         });
         rig.userData.arrow.position.z = 0.25 - pull;
-        rig.userData.arrow.visible = this.ammo >= 1 && this.recoil < 0.4;
+        rig.userData.arrow.visible = (!this.usesAmmo || this.ammo >= 1) && this.recoil < 0.4;
         n.arms[1].rotation.x = -1.1 + this.chargeLevel * 0.6;
       }
       let c = n.pose.armBase;
-      if (n.pose.punch)
+      if (this.def.id === `ello`) {
+        let slash = this.slashAnim;
+        if (slash) {
+          let p = $c(slash.t / slash.duration, 0, 1),
+            direction = slash.step === 1 ? -1 : 1,
+            cut = p < 0.25 ? p / 0.25 : p < 0.67 ? (p - 0.25) / 0.42 : 1 - (p - 0.67) / 0.33;
+          cut = $c(cut, 0, 1);
+          n.arms[0].rotation.x = c[0][0] - 0.18 - cut * 0.22;
+          n.arms[1].rotation.x = c[1][0] - 0.3 - cut * 0.34;
+          n.arms[0].rotation.z = c[0][1] - direction * (0.18 + cut * 0.34);
+          n.arms[1].rotation.z = c[1][1] - direction * (0.26 + cut * 0.52);
+        } else if (this.parryT > 0) {
+          n.arms[0].rotation.x = c[0][0] - 0.35;
+          n.arms[1].rotation.x = c[1][0] - 0.5;
+          n.arms[0].rotation.z = c[0][1] + 0.28;
+          n.arms[1].rotation.z = c[1][1] - 0.42;
+        } else {
+          n.arms[0].rotation.x = c[0][0] + (t ? -a * 0.55 : 0);
+          n.arms[1].rotation.x = c[1][0] + (t ? a * 0.25 : 0);
+          n.arms[0].rotation.z = nl(n.arms[0].rotation.z, c[0][1], 18, e);
+          n.arms[1].rotation.z = nl(n.arms[1].rotation.z, c[1][1], 18, e);
+        }
+      } else if (n.pose.punch)
         for (let e = 0; e < 2; e++) {
           let r = this.punch[e];
           ((n.arms[e].rotation.x = c[e][0] - r * 0.75 + (t ? Math.sin(this.walkPhase + e * Math.PI) * 0.25 : 0)),

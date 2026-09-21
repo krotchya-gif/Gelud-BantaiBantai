@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b0e1a">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" type="image/png" href="./icons/icon-192.png">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="./icons/bakuhantam-192.png">
+  <link rel="apple-touch-icon" href="./icons/bakuhantam-apple-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="BakuHantam">
@@ -42,12 +42,14 @@
         <div class="stick" id="stick-move"><i></i><b>MOVE</b></div>
         <div class="stick" id="stick-aim"><i></i><b>DRAG TO AIM &middot; TAP TO AUTO-AIM</b></div>
       </div>
-      <div id="super"><div class="core" id="super-core">SUPER</div></div>
-      <button id="item-action" type="button" disabled aria-label="No item held" title="No item held">
-        <span class="item-icon" id="item-icon" aria-hidden="true">◇</span>
-        <span class="item-label" id="item-label">ITEM</span>
-        <span class="item-key" id="item-key">F</span>
-      </button>
+      <div id="action-cluster">
+        <div id="super"><div class="core" id="super-core">SUPER</div></div>
+        <button id="item-action" type="button" disabled aria-label="No item held" title="No item held">
+          <span class="item-icon" id="item-icon" aria-hidden="true">◇</span>
+          <span class="item-label" id="item-label">ITEM</span>
+          <span class="item-key" id="item-key">F</span>
+        </button>
+      </div>
     </div>
 
     <div id="desktop-actions" aria-label="Match controls">

@@ -134,7 +134,41 @@ var ld = class {
               : ($(`settings`).classList.remove(`open`), $(`gear`).setAttribute(`aria-expanded`, `false`))));
       }),
       this.hud.syncSettings(),
-      $(`item-action`).addEventListener(`click`, () => this.useHeldItem()),
+      (() => {
+        let button = $(`item-action`),
+          touchActivationAt = 0,
+          touchPointerId = null;
+        button.addEventListener(`pointerdown`, (event) => {
+          if (event.pointerType !== `touch`) return;
+          event.preventDefault();
+          event.stopPropagation();
+          touchPointerId = event.pointerId;
+          touchActivationAt = performance.now();
+          this.useHeldItem();
+        });
+        window.addEventListener(`pointerup`, (event) => {
+          if (event.pointerId !== touchPointerId) return;
+          touchPointerId = null;
+          touchActivationAt = performance.now();
+        });
+        window.addEventListener(`pointercancel`, (event) => {
+          if (event.pointerId !== touchPointerId) return;
+          touchPointerId = null;
+          touchActivationAt = 0;
+        });
+        button.addEventListener(`click`, (event) => {
+          let generatedByTouch =
+            event.pointerType === `touch` ||
+            (!event.pointerType && touchActivationAt > 0 && event.detail > 0 && performance.now() - touchActivationAt < 800);
+          if (generatedByTouch) {
+            touchActivationAt = 0;
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+          this.useHeldItem();
+        });
+      })(),
       this.toMenu());
     let s = this.params.get(`auto`);
     (s && Bc[s] && this.startMatch(s),
@@ -381,6 +415,12 @@ var ld = class {
       (e.ammo = 3),
       (e.reloadT = 0),
       (e.superCharge = 0),
+      (e.comboStep = 0),
+      (e.comboResetT = 0),
+      (e.meleeLunge = null),
+      (e.slashAnim = null),
+      (e.slashTrailT = 0),
+      (e.iaidoState = null),
       (e.fireCooldown = 0),
       (e.burst = null),
       (e.leap = null),
@@ -562,14 +602,22 @@ var ld = class {
         (this.guideSector.visible = !0),
         this.guideSector.material.color.set(c),
         (this.guideSector.material.opacity = l));
-    else if (e.kind === `dash`) {
+    else if (e.kind === `dash` || e.kind === `iaido`) {
       let t = Math.min(i, e.range),
         hit = this.world.raycast(o.x, o.z, o.x + n * t, o.z + r * t);
       hit && (t = Math.max(0.3, hit.dist - 0.3));
-      (this.guideRect.scale.set(t, 1, 0.16),
+      (this.guideRect.scale.set(t, 1, e.kind === `iaido` ? e.slashRadius * 2 : 0.16),
         (this.guideRect.visible = !0),
         this.guideRect.material.color.set(c),
         (this.guideRect.material.opacity = l));
+    } else if (e.kind === `arrow-shower`) {
+      let distance = Math.min(i, e.range);
+      (this.guideCircle.position.set(distance, 0, 0),
+        this.guideCircle.scale.setScalar(e.areaRadius),
+        (this.guideCircle.visible = !0),
+        this.guideCircle.material.color.set(c),
+        (this.guideCircle.material.opacity = 0.34),
+        this.guideRing.material.color.set(c));
     } else if (e.kind === `burst` || e.kind === `melee`) {
       let t = e.range,
         i = this.world.raycast(o.x, o.z, o.x + n * e.range, o.z + r * e.range);
@@ -603,7 +651,7 @@ var ld = class {
     let t = this.input,
       n = t.axis();
     ((e.moveX = n.x), (e.moveZ = n.z));
-    let charging = e.def.id === `syafiah` && e.canAct() && e.ammo >= 1 && !e.burst && e.fireCooldown <= 0 && this.state === `playing` && (t.touchMode ? t.sticks.aim.id !== null : t.fire && !t.superHeld),
+    let charging = e.def.id === `syafiah` && e.canAct() && !e.burst && e.fireCooldown <= 0 && this.state === `playing` && (t.touchMode ? t.sticks.aim.id !== null : t.fire && !t.superHeld),
       chargeStartedAt = t.touchMode ? t.sticks.aim.startedAt : t.fireStartedAt;
     ((e.isCharging = charging),
       (e.chargeLevel = charging
@@ -655,7 +703,9 @@ var ld = class {
       r = Math.hypot(e.x, e.y) || 1,
       i = e.x / r,
       a = e.y / r,
-      o = t.kind === `lob` || t.kind === `leap` ? Math.max(t.kind === `leap` ? 2 : 1, e.mag * t.range) : t.range;
+      o = t.kind === `lob` || t.kind === `leap` || t.kind === `arrow-shower`
+        ? Math.max(t.kind === `leap` ? 2 : 1, e.mag * t.range)
+        : t.range;
     return { dx: i, dz: a, dist: o, x: n.x + i * o, z: n.z + a * o };
   }
   autoAim(e) {
@@ -664,6 +714,34 @@ var ld = class {
       r = 0,
       i = 0,
       a = 1 / 0;
+    if (e.kind === `arrow-shower`) {
+      let best = null,
+        bestScore = -1;
+      for (let target of this.brawlers) {
+        if (target === t || !target.alive || target.hidden || target.airborne) continue;
+        let distance = sl(t.x, t.z, target.x, target.z);
+        if (distance > e.range) continue;
+        let lead = e.warningDelay + 0.22,
+          x = target.x + target.vel.x * lead,
+          z = target.z + target.vel.y * lead,
+          score = 0;
+        for (let other of this.brawlers)
+          if (other !== t && other.alive && !other.hidden && !other.airborne && Math.hypot(other.x + other.vel.x * lead - x, other.z + other.vel.y * lead - z) <= e.areaRadius)
+            score++;
+        score -= distance * 0.035;
+        if (score > bestScore) ((bestScore = score), (best = { x, z }));
+      }
+      if (!best) {
+        let distance = e.range * 0.7;
+        best = { x: t.x + Math.sin(t.facing) * distance, z: t.z + Math.cos(t.facing) * distance };
+      }
+      let distance = Math.hypot(best.x - t.x, best.z - t.z) || 1,
+        scale = Math.min(1, e.range / distance);
+      best.x = t.x + (best.x - t.x) * scale;
+      best.z = t.z + (best.z - t.z) * scale;
+      distance = Math.hypot(best.x - t.x, best.z - t.z) || 1;
+      return { dx: (best.x - t.x) / distance, dz: (best.z - t.z) / distance, dist: distance, x: best.x, z: best.z };
+    }
     for (let o of this.brawlers) {
       if (o === t || !o.alive || o.hidden || o.airborne) continue;
       let s = sl(t.x, t.z, o.x, o.z);

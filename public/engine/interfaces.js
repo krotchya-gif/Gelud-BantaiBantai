@@ -199,13 +199,16 @@ var  Ru = 9,
     tryBasicAttack(dx, dz, x, z) {
       const b = this.b;
       if (b.def.id !== `syafiah`) return b.attack(dx, dz, x, z);
-      if (!b.canAct() || b.ammo < 1 || b.fireCooldown > 0 || b.burst) return !1;
-      this.drawTime = (this.drawTime || 0) + this.drawDt;
+      if (!b.canAct() || (b.usesAmmo && b.ammo < 1) || b.fireCooldown > 0 || b.burst) return !1;
+      let distance = Math.hypot(x - b.x, z - b.z),
+        quick = distance < 4.6 || !!b.game.combat.incomingBullet(b, 0.4),
+        goal = quick ? 0.32 : b.def.attack.chargeTime;
+      this.drawTime = Math.min(goal, (this.drawTime || 0) + this.drawDt);
       b.isCharging = !0;
       b.chargeLevel = Math.min(1, this.drawTime / b.def.attack.chargeTime);
       b.aimAngle = Math.atan2(dx, dz);
       b.aimHold = 0.15;
-      if (this.drawTime < 0.75) return !1;
+      if (this.drawTime < goal) return !1;
       const fired = b.attack(dx, dz, x, z, this.drawTime);
       this.drawTime = 0;
       return fired;
@@ -229,12 +232,13 @@ var  Ru = 9,
         a = 0,
         o = 0,
         s = this.target && this.target.alive ? this.target : null;
-      if (t.def.super.kind === `parry` && t.superReady && this.shootT <= 0 && t.spawnT <= 0) {
-        let bullet = n.combat.incomingBullet(t, t.def.super.duration);
+      if ((t.def.super.kind === `parry` || t.def.super.kind === `iaido`) && t.superReady && this.shootT <= 0 && t.spawnT <= 0) {
+        let bullet = n.combat.incomingBullet(t, t.def.super.guardDuration || t.def.super.duration);
         if (bullet) {
           let dx = -bullet.dx,
-            dz = -bullet.dz;
-          t.useSuper(dx, dz, t.x + dx * 2, t.z + dz * 2) && (this.shootT = Q(0.45, 0.7));
+            dz = -bullet.dz,
+            range = t.def.super.dashRange || t.def.super.range || 2;
+          t.useSuper(dx, dz, t.x + dx * range, t.z + dz * range) && (this.shootT = Q(0.45, 0.7));
         }
       }
       if (this.state === `fight` && s) {
@@ -248,11 +252,14 @@ var  Ru = 9,
             c = t.def.preferred,
             l = 0;
           (n > c + 0.8 ? (l = 1) : n < c - 1.2 && (l = -1),
-            t.ammo < 0.8 && n < c + 2.5 && (l = -1),
+            t.usesAmmo && t.ammo < 0.8 && n < c + 2.5 && (l = -1),
             (this.strafeT -= e),
             this.strafeT <= 0 && ((this.strafeT = Q(0.5, 1.5)), (this.strafeDir *= -1)));
-          let u = c < 2.5 ? 0.25 : 0.85;
-          ((a = r * l + -i * this.strafeDir * u), (o = i * l + r * this.strafeDir * u));
+          let u = c < 2.5 ? 0.25 : 0.85,
+            steadyAim = t.def.id === `ace` && n > 4.5 && n < t.def.attack.range * 0.85 && !this.game.combat.incomingBullet(t, 0.45);
+          steadyAim
+            ? ((a = 0), (o = 0))
+            : ((a = r * l + -i * this.strafeDir * u), (o = i * l + r * this.strafeDir * u));
         }
       } else
         this.state === `box` && this.box && this.box.alive
@@ -273,22 +280,45 @@ var  Ru = 9,
       let c = Math.hypot(a, o);
       if (((t.moveX = c > 0.01 ? a / c : 0), (t.moveZ = c > 0.01 ? o / c : 0), s && this.reactT <= 0 && !s.airborne)) {
         let e = sl(t.x, t.z, s.x, s.z),
-          a = this.thrower ? e < i.range : r.hasLineOfSight(t.x, t.z, s.x, s.z);
-        if (a && t.def.super.kind !== `parry` && t.superReady && this.shootT <= 0) {
+          a = this.thrower ? e < i.range : r.hasLineOfSight(t.x, t.z, s.x, s.z),
+          superDef = t.def.super,
+          superDistance = superDef.kind === `arrow-shower` ? e < superDef.range : e < (superDef.range || 0) * 0.9;
+        if (superDef.kind === `arrow-shower` && superDistance && t.superReady && this.shootT <= 0) {
+          let lead = superDef.warningDelay + 0.22,
+            x = s.x + s.vel.x * lead,
+            z = s.z + s.vel.y * lead,
+            cluster = 0;
+          for (let other of n.brawlers)
+            if (other !== t && other.alive && !other.hidden && !other.airborne && Math.hypot(other.x + other.vel.x * lead - x, other.z + other.vel.y * lead - z) <= superDef.areaRadius)
+              cluster++;
+          if ((cluster >= 2 || e < 6.5) && Math.random() < 0.65) {
+            let dx = x - t.x,
+              dz = z - t.z,
+              length = Math.hypot(dx, dz) || 1,
+              scale = Math.min(1, superDef.range / length);
+            ((x = t.x + dx * scale), (z = t.z + dz * scale));
+            length = Math.hypot(x - t.x, z - t.z) || 1;
+            t.useSuper((x - t.x) / length, (z - t.z) / length, x, z) && (this.shootT = Q(0.65, 0.9));
+          }
+        }
+        if (a && superDef.kind !== `parry` && superDef.kind !== `arrow-shower` && t.superReady && this.shootT <= 0) {
           let n = t.def.super,
             r = n.kind === `spread` ? 5 : n.kind === `leap` ? n.range : n.range * 0.9,
             i = n.kind === `leap` ? 2.5 : 0;
           if (e < r && e > i && Math.random() < 0.6) {
             let e = this.aimAt(s.x, s.z, s.vel.x, s.vel.y, n);
-            t.useSuper(e.dx, e.dz, e.x, e.z) && (this.shootT = Q(0.4, 0.8));
+            let dashDistance = Math.min(n.range, sl(t.x, t.z, e.x, e.z)),
+              blockedDash = n.kind === `dash` && this.game.world.raycast(t.x, t.z, t.x + e.dx * dashDistance, t.z + e.dz * dashDistance);
+            if (!blockedDash || blockedDash.dist >= dashDistance - 0.8)
+              t.useSuper(e.dx, e.dz, e.x, e.z) && (this.shootT = Q(0.4, 0.8));
           }
         }
-        if (a && e < i.range * 0.95 && this.shootT <= 0 && t.ammo >= 1) {
+        if (a && e < i.range * 0.95 && this.shootT <= 0 && (!t.usesAmmo || t.ammo >= 1)) {
           let e = this.aimAt(s.x, s.z, s.vel.x, s.vel.y, i);
           this.tryBasicAttack(e.dx, e.dz, e.x, e.z) &&
-            (this.shootT = (Q(0.45, 1) + (t.ammo < 1 ? 0.4 : 0)) * (s.isPlayer ? n.difficulty.cadence : 1));
+            (this.shootT = (t.def.id === `ello` ? 0.12 : Q(0.45, 1) + (t.usesAmmo && t.ammo < 1 ? 0.4 : 0)) * (s.isPlayer ? n.difficulty.cadence : 1));
         }
-      } else if (this.state === `box` && this.box && this.box.alive && this.shootT <= 0 && t.ammo >= 1) {
+      } else if (this.state === `box` && this.box && this.box.alive && this.shootT <= 0 && (!t.usesAmmo || t.ammo >= 1)) {
         let e = sl(t.x, t.z, this.box.x, this.box.z);
         if (e < i.range * 0.85 && (this.thrower || this.seesBox(this.box))) {
           let n = (this.box.x - t.x) / (e || 1),
@@ -558,7 +588,7 @@ var  Ru = 9,
     }
     buildMenu() {
       let e = $(`cards`),
-        t = { dusty: `💥`, ace: `🎯`, fuse: `💣`, titan: `🥊`, volt: `⚡`, naka: `✦`, ello: `⚔️`, syafiah: `🏹` },
+        t = { dusty: `💥`, ace: `🎯`, fuse: `💣`, titan: `🥊`, volt: `⚡`, naka: `✥`, ello: `🗡️`, syafiah: `🏹` },
         n = (label, value) =>
           `<div class="stat"><span>${label}</span><i><b style="width:${Math.round((value / 5) * 100)}%"></b></i></div>`;
       let modeDescriptions = {
@@ -566,6 +596,8 @@ var  Ru = 9,
         blitz: `A faster survival round with less time to loot.`,
         deathmatch: `50 KOs or 5:00 · power-up cap lvl 10 · respawn in 5s · shield for 2s.`,
       };
+      let roleById = { naka: `Ninja`, ello: `Samurai`, syafiah: `Archer` };
+      let weaponById = { naka: `✥ Shuriken`, ello: `🗡️ Katana`, syafiah: `🏹 Bow` };
       for (let [t, n] of Object.entries(MATCH_MODES)) {
         let r = document.createElement(`button`);
         ((r.type = `button`),
@@ -595,9 +627,11 @@ var  Ru = 9,
           i.setAttribute(`aria-pressed`, String(r.id === this.selected)));
         let a = `#` + r.palette.body.toString(16).padStart(6, `0`),
           o = `#` + r.palette.accent.toString(16).padStart(6, `0`),
-          stats = r.stats || { durability: 3, agility: 3, damage: 3, range: 3 };
+          stats = r.stats || { durability: 3, agility: 3, damage: 3, range: 3 },
+          role = r.role && r.role !== `undefined` ? r.role : roleById[r.id] || `Brawler`,
+          weapon = weaponById[r.id];
         i.innerHTML = `<div class="swatch" style="background:linear-gradient(135deg, ${a}, ${o})">${t[r.id] || `★`}</div>
-        <h2>${r.name}</h2><div class="role">${r.role}</div><p>${r.blurb}</p>
+        <h2>${r.name}</h2><div class="role">${role}</div>${weapon ? `<div class="equipment">${weapon}</div>` : ``}<p>${r.blurb}</p>
         ${n(`DURABILITY`, stats.durability)}${n(`AGILITY`, stats.agility)}${n(`DAMAGE`, stats.damage)}${n(`RANGE`, stats.range)}
         <div class="passive"><b>PASSIVE</b> ${r.passive || `No passive`}</div>`;
         let l = () => {
@@ -781,7 +815,7 @@ var  Ru = 9,
       ((t.className = `oh` + (e.isPlayer ? ` me` : ``)),
         (t.innerHTML = `<div class="oh-name"><span class="n"></span><span class="oh-cubes"></span></div>
       <div class="oh-bar"><div class="oh-fill"></div><span class="oh-hp"></span></div>
-      ${e.isPlayer ? `<div class="oh-ammo"><i><b></b></i><i><b></b></i><i><b></b></i></div>` : ``}`),
+      ${e.isPlayer && e.usesAmmo ? `<div class="oh-ammo"><i><b></b></i><i><b></b></i><i><b></b></i></div>` : ``}`),
         (t.querySelector(`.n`).textContent = e.name),
         this.overheadLayer.appendChild(t),
         this.overheads.set(e.id, {
@@ -908,7 +942,7 @@ var  Ru = 9,
             (t.hp.textContent = o)),
           e.cubes !== t.lastCubes &&
             ((t.lastCubes = e.cubes), (t.cubes.textContent = e.cubes > 0 ? `⚡${e.cubes}` : ``)),
-          e.isPlayer)
+          e.isPlayer && e.usesAmmo)
         )
           for (let n = 0; n < 3; n++) {
             let r = $c(e.ammo - n + (Math.floor(e.ammo) === n ? e.reloadT : 0), 0, 1),
@@ -1010,7 +1044,8 @@ var  Ru = 9,
       let button = $(`item-action`),
         item = player?.heldItem || null,
         canUse = !!item && this.game.state === `playing` && !this.game.paused && player.canUseHeldItem(),
-        signature = `${item || ``}:${+canUse}:${this.touch ? `touch` : `keys`}`;
+        isFocusAmmo = item === `ammo` && [`ello`, `syafiah`].includes(player?.def?.id),
+        signature = `${player?.def?.id || ``}:${item || ``}:${+canUse}:${this.touch ? `touch` : `keys`}`;
       if (signature === this.lastItemUi) return;
       this.lastItemUi = signature;
       let meta = {
@@ -1020,6 +1055,7 @@ var  Ru = 9,
         ammo: { icon: `↻`, label: `AMMO`, title: `Refill all ammo` },
         super: { icon: `✦`, label: `SUPER`, title: `Charge 25% of your Super meter` },
       }[item];
+      if (isFocusAmmo) meta = { ...meta, label: `FOCUS`, title: `Focus charge` };
       (($(`item-icon`).textContent = meta?.icon || `◇`),
         ($(`item-label`).textContent = meta?.label || `ITEM`),
         ($(`item-key`).textContent = this.touch ? `TAP` : `F`),
