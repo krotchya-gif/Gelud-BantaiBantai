@@ -26,6 +26,12 @@ export default defineConfig({
     __ENGINE_BUILD_ID__: JSON.stringify(engineBuildId),
   },
   build: {
+    rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        characters: fileURLToPath(new URL('./character-preview.html', import.meta.url)),
+      },
+    },
     outDir: 'dist',
     emptyOutDir: true,
     target: 'es2022',

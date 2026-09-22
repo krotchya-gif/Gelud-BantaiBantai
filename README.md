@@ -47,6 +47,7 @@ public/engine/
   map-biomes.js                data biome dan aturan permukaan arena
   world.js                     arena, collision, cover, dan objek dunia
   brawlers.js                  model, state, input combat, AI-facing state
+  character-models.js          model referensi Athallah, Einar, Zeyd, Azka, Nopal
   combat.js                    proyektil, melee, dash, knockback, dan item
   effects.js                   partikel, impact, trail, gas, dan pencahayaan efek
   interfaces.js                HUD, menu, settings, AI, dan kontrol touch
@@ -56,6 +57,26 @@ public/engine/
 File engine dimuat sebagai script klasik berurutan karena beberapa kelas Three.js dan gameplay memakai namespace global. `three-legacy.js` menyimpan library serta lima karakter baseline lama; data karakter yang direvisi ditimpa di `character-roster.js`.
 
 ## Roster aktual
+
+### Desain karakter
+
+Lima karakter utama memakai model low-poly prosedural baru yang mengikuti identitas
+reference sheet. Athallah memakai bandana merah, goatee, coat pendek dan shotgun
+dua laras bertumpuk; Einar memakai armor zaitun, tubuh paling lebar dan gauntlet
+besar; Zeyd memakai coat putih-biru dan dua pistol. Azka memiliki goggles, scarf
+oranye, rompi kerja, tas perkakas asimetris dan bom. Nopal memiliki rambut swept-back
+tanpa goggles, jaket kuning berkerah pendek, kaki lebih panjang, modul punggung
+pipih dan penghantar listrik di betis. Warna serangan Nopal juga menjadi kuning.
+
+Buka `/character-preview.html` untuk melihat semua delapan model yang dipakai game,
+termasuk Naka, Ello dan Syafiah yang masih memakai rig legacy. Tampilan tersedia
+dari depan, samping, belakang dan kamera atas. Klik nama untuk melihat satu karakter,
+gunakan Grayscale untuk membandingkan siluet, atau Gerak untuk pratinjau langkah.
+Ini merupakan interpretasi low-poly untuk skala arena, bukan mesh sculpt berdetail
+tinggi seperti ilustrasi referensi. Statistik dan mekanik combat tetap.
+
+Jalankan `npm run test:characters` untuk memeriksa kedelapan rig, geometri finite,
+material, cache model, batas ukuran, pembeda siluet dan tuning combat.
 
 | Brawler | HP | Speed | Basic | Range | Super / identitas |
 | --- | ---: | ---: | --- | ---: | --- |

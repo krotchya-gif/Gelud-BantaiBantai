@@ -597,7 +597,11 @@ var  Ru = 9,
         deathmatch: `50 KOs or 5:00 · power-up cap lvl 10 · respawn in 5s · shield for 2s.`,
       };
       let roleById = { naka: `Ninja`, ello: `Samurai`, syafiah: `Archer` };
-      let weaponById = { naka: `✥ Shuriken`, ello: `🗡️ Katana`, syafiah: `🏹 Bow` };
+      let weaponById = {
+        dusty: `Dustbreaker · Double-barrel shotgun`, ace: `Dual Apex · Twin pistols`,
+        fuse: `Fuse · Custom bombs`, titan: `Titan · Impact gauntlets`, volt: `Volt Driver · Pulse blaster`,
+        naka: `✥ Shuriken`, ello: `🗡️ Katana`, syafiah: `🏹 Bow`,
+      };
       for (let [t, n] of Object.entries(MATCH_MODES)) {
         let r = document.createElement(`button`);
         ((r.type = `button`),
