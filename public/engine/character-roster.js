@@ -163,8 +163,8 @@
   };
   Bc.ace = {
     ...Bc.ace,
-    attack: { ...Bc.ace.attack, damage: 300, noKnockback: true },
-    super: { ...Bc.ace.super, damage: 300, breaksWalls: false, noKnockback: true },
+    attack: { ...Bc.ace.attack, damage: 220, range: 8.2, noKnockback: true },
+    super: { ...Bc.ace.super, damage: 220, breaksWalls: false, noKnockback: true },
   };
   Bc.titan = { ...Bc.titan, speed: 3.25, reload: 1.0 };
 

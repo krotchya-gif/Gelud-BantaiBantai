@@ -81,7 +81,7 @@ material, cache model, batas ukuran, pembeda siluet dan tuning combat.
 | Brawler | HP | Speed | Basic | Range | Super / identitas |
 | --- | ---: | ---: | --- | ---: | --- |
 | Athallah | 3900 | 3.15 | 5 × 330 | 7.0 | 9 × 340, knockback 9, hancurkan dinding |
-| Zeyd | 3000 | 3.25 | 6 × 300 | 9.5 | 12 × 300, pierce, tanpa knockback, tidak hancurkan dinding |
+| Zeyd | 3000 | 3.25 | 6 × 220 | 8.2 | 12 × 220, pierce, tanpa knockback, tidak hancurkan dinding |
 | Azka | 2900 | 3.00 | Bom AoE 920 | 7.5 | Bom AoE 2400, knockback 10, hancurkan dinding |
 | Einar | 6200 | 3.25 | 4 × 390 | 2.7 | Leap 1000, knockback 11, hancurkan dinding |
 | Nopal | 3400 | 3.55 | 3 × 440 | 8.4 | 8 × 310, pierce |
@@ -94,7 +94,7 @@ material, cache model, batas ukuran, pembeda siluet dan tuning combat.
 - **Naka:** Triple Shuriken memakai spread sempit, speed 24, dan return damage 50%. Hit saat shuriken kembali memberi bonus speed 15% selama 1,5 detik. Shadow Rush berdash maksimal 6 unit dan tidak menembus dinding.
 - **Ello:** Tidak memakai ammo. Tiga serangan memakai cooldown dan combo reset 0,75 detik, masing-masing memiliki micro-lunge dengan collision. Samurai Poise mengurangi knockback 65%; slash, lunge, guard Iaido, dan dash Iaido memberi imunitas knockback sementara.
 - **Syafiah:** Tidak memakai ammo. Draw menginterpolasi damage, range, dan speed dari quick shot ke charged shot; Quickdraw memberi bonus 10% pada timing sekitar 0,70–0,80 detik. Arrow Shower menargetkan area, turun dalam lima wave, dan tidak diblokir atau menghancurkan dinding.
-- **Zeyd:** Damage basic dan Super menjadi 300 per projectile. Basic dan Super menggunakan `noKnockback`; Super tetap pierce tetapi tidak lagi menghancurkan dinding.
+- **Zeyd:** Damage basic dan Super menjadi 220 per projectile dengan range basic 8.2. Basic dan Super menggunakan `noKnockback`; Super tetap pierce tetapi tidak lagi menghancurkan dinding.
 - **Einar:** HP dan damage tetap; speed menjadi 3,25 dan reload menjadi 1 detik.
 
 Athallah, Azka, dan Nopal tetap menjadi baseline pass ini. Item `ammo` berubah menjadi **Focus** yang mengisi 20% Super untuk Ello dan Syafiah; karakter lain tetap menerima ammo refill.
